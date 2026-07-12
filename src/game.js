@@ -235,7 +235,7 @@ function enemyImageFile(enemy) {
     "加班怨靈": "enemy-ghost.gif",
     "寶箱模仿怪": "enemy-mimic.gif",
     "女僕劍士": "enemy-elite-maid.png",
-    "深淵處刑者": "enemy-elite-executioner.mp4",
+    "深淵處刑者": "enemy-elite-executioner.gif",
     "慣老闆": "enemy-boss.gif",
     "雷同事": "enemy-coworker.gif",
     "難搞的客戶": "enemy-client.gif",
