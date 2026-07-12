@@ -19,7 +19,7 @@ const {
   statusText,
   useItem
 } = require("./game");
-const { actionButtons, buffMenu, classMenu, combatButtons, gameEmbed, gameFiles, hiddenRoomButtons, inventoryMenu, mapMenu, shopMenu } = require("./components");
+const { actionButtons, buffMenu, classMenu, combatButtons, gameEmbed, gameFiles, hiddenRoomButtons, inventoryMenu, shopMenu } = require("./components");
 const { startDashboard } = require("./dashboard");
 
 const token = process.env.DISCORD_TOKEN;
@@ -56,11 +56,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith("buff_select:")) {
       await handleBuffSelect(interaction);
-      return;
-    }
-
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith("map_select:")) {
-      await handleMapSelect(interaction);
       return;
     }
 
@@ -228,17 +223,7 @@ async function handleClassSelect(interaction) {
 async function handleBuffSelect(interaction) {
   const [, classKey] = interaction.customId.split(":");
   const buffKey = interaction.values[0];
-  await interaction.update({
-    content: "選擇冒險地圖：經典地下城或霓虹夜城。",
-    embeds: [],
-    components: [mapMenu(classKey, buffKey)]
-  });
-}
-
-async function handleMapSelect(interaction) {
-  const [, classKey, buffKey] = interaction.customId.split(":");
-  const mapKey = interaction.values[0];
-  const player = createPlayer(interaction.user.id, classKey, buffKey, mapKey);
+  const player = createPlayer(interaction.user.id, classKey, buffKey);
   setPlayer(player);
   await interaction.update({ content: "已開始冒險，公開面板已發到頻道。", embeds: [], components: [] });
   const panelMessage = await interaction.channel.send({

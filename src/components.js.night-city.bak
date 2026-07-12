@@ -6,7 +6,7 @@ const {
   StringSelectMenuBuilder
 } = require("discord.js");
 const path = require("node:path");
-const { CLASSES, CLASS_EMOJI, ITEM_DEFS, MAPS, SHOP_ITEMS, START_BUFFS, healthState, statusText } = require("./game");
+const { CLASSES, CLASS_EMOJI, ITEM_DEFS, SHOP_ITEMS, START_BUFFS, healthState, statusText } = require("./game");
 
 function gameEmbed(title, text, player) {
   const state = healthState(player);
@@ -96,22 +96,6 @@ function buffMenu(classKey) {
       .setPlaceholder("選一個開局祝福")
       .addOptions(
         Object.entries(START_BUFFS).map(([value, info]) => ({
-          label: info.label,
-          value,
-          emoji: info.icon,
-          description: info.description
-        }))
-      )
-  );
-}
-
-function mapMenu(classKey, buffKey) {
-  return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId(`map_select:${classKey}:${buffKey}`)
-      .setPlaceholder("選擇冒險地圖")
-      .addOptions(
-        Object.entries(MAPS).map(([value, info]) => ({
           label: info.label,
           value,
           emoji: info.icon,
@@ -260,6 +244,5 @@ module.exports = {
   gameFiles,
   hiddenRoomButtons,
   inventoryMenu,
-  mapMenu,
   shopMenu
 };

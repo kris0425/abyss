@@ -150,23 +150,11 @@ const SHOP_ITEMS = {
   relic: { label: "神秘遺物", icon: "✨", cost: 22, description: "隨機獲得一個遺物。" }
 };
 
-const MAPS = {
-  dungeon: { label: "地下城", icon: "🏰", description: "經典地城與原本的敵人。" },
-  night_city: { label: "夜城 Night City", icon: "🌃", description: "高科技都市，敵人會駭入並施加控制效果。" }
-};
-
 const ENEMIES = [
   { name: "地城史萊姆", hp: 14, atk: 4, gold: 4 },
   { name: "發票骷髏", hp: 18, atk: 5, gold: 6 },
   { name: "加班怨靈", hp: 22, atk: 7, gold: 8 },
   { name: "寶箱模仿怪", hp: 26, atk: 8, gold: 12 }
-];
-
-const NIGHT_CITY_ENEMIES = [
-  { name: "街頭駭客", hp: 17, atk: 5, gold: 7, skills: ["hack", "blind"] },
-  { name: "霓虹無人機", hp: 20, atk: 6, gold: 8, skills: ["blind", "paralyze"] },
-  { name: "企業鎮暴兵", hp: 25, atk: 7, gold: 10, skills: ["stun", "paralyze"] },
-  { name: "義體殺手", hp: 29, atk: 9, gold: 14, skills: ["hack", "blind", "stun"] }
 ];
 
 const ELITE_ENEMIES = [
@@ -194,11 +182,7 @@ const ENEMY_EMOJI = {
   "雷同事": "⚡",
   "難搞的客戶": "📞",
   hAO: "🧨",
-  "地城守門人": "🛡️",
-  "街頭駭客": "💻",
-  "霓虹無人機": "🚁",
-  "企業鎮暴兵": "🤖",
-  "義體殺手": "🥷"
+  "地城守門人": "🛡️"
 };
 
 const ENEMY_ART = {
@@ -349,7 +333,7 @@ function weightedPick(entries) {
   return entries[entries.length - 1];
 }
 
-function createPlayer(id, classKey, buffKey = "attack", mapKey = "dungeon") {
+function createPlayer(id, classKey, buffKey = "attack") {
   const base = CLASSES[classKey] ?? CLASSES.blade;
   const player = {
     id,
@@ -367,9 +351,7 @@ function createPlayer(id, classKey, buffKey = "attack", mapKey = "dungeon") {
     relics: [...(base.relics ?? [])],
     items: { potion: 1 },
     weapon: { ...(STARTER_WEAPONS[base.starterWeapon] ?? STARTER_WEAPONS.blade) },
-    startBuff: START_BUFFS[buffKey]?.label ?? START_BUFFS.attack.label,
-    mapKey: MAPS[mapKey] ? mapKey : "dungeon",
-    mapLabel: MAPS[mapKey]?.label ?? MAPS.dungeon.label
+    startBuff: START_BUFFS[buffKey]?.label ?? START_BUFFS.attack.label
   };
   START_BUFFS[buffKey]?.apply(player);
   return player;
@@ -398,8 +380,6 @@ function playerDebuffText(player) {
   if (d.burn) parts.push(`🔥燒傷${d.burn}`);
   if (d.poison) parts.push(`☠️中毒${d.poison}`);
   if (d.weak) parts.push(`🌀虛弱${d.weak}`);
-  if (d.hack) parts.push(`💻駭入${d.hack}`);
-  if (d.blind) parts.push(`🌫️致盲${d.blind}`);
   return parts.join(" ");
 }
 
@@ -415,7 +395,6 @@ function tickPlayerDebuffDamage(player, lines) {
     d.poison -= 1;
     lines.push("☠️ 中毒造成 3 傷害。");
   }
-  if (d.hack > 0) d.hack -= 1;
   cleanupPlayerDebuffs(player);
 }
 
@@ -434,41 +413,6 @@ function consumeActionDebuff(player, lines) {
     return true;
   }
   return false;
-}
-
-function consumeBlindDebuff(player, lines) {
-  const d = player.debuffs ?? {};
-  if (!(d.blind > 0)) return false;
-  d.blind -= 1;
-  const missed = Math.random() < 0.5;
-  lines.push(missed ? "🌫️ 致盲干擾視線，你的攻擊落空。" : "🌫️ 你穿過視覺雜訊，勉強鎖定敵人。");
-  cleanupPlayerDebuffs(player);
-  return missed;
-}
-
-function applyNightCitySkill(player, enemy, lines) {
-  if (player.mapKey !== "night_city" || !enemy?.skills?.length || !player.alive) return;
-  if (Math.random() >= 0.4) return;
-
-  const skill = pick(enemy.skills);
-  player.debuffs ??= {};
-  if (skill === "hack") {
-    const damage = 3 + roll(4) - 1;
-    const stolen = Math.min(player.gold, 1 + roll(3) - 1);
-    player.hp -= damage;
-    player.gold -= stolen;
-    player.debuffs.hack = 1;
-    lines.push(`💻 ${enemy.name} 駭入你的義體，造成 ${damage} 穿透傷害並竊取 ${stolen} 金幣。`);
-  } else if (skill === "blind" && !player.debuffs.blind) {
-    player.debuffs.blind = 1;
-    lines.push(`🌫️ ${enemy.name} 釋放視覺病毒：你被致盲，下一次攻擊有 50% 機率落空。`);
-  } else if (skill === "stun" && !player.debuffs.stun) {
-    player.debuffs.stun = 1;
-    lines.push(`💫 ${enemy.name} 發射震撼脈衝：你被暈眩一回合。`);
-  } else if (skill === "paralyze" && !player.debuffs.paralyze) {
-    player.debuffs.paralyze = 1;
-    lines.push(`⚡ ${enemy.name} 施放電磁束縛：你被麻痺一回合。`);
-  }
 }
 
 function tickWeakDebuff(player) {
@@ -788,8 +732,7 @@ function startEliteCombat(player) {
 }
 
 function startCombat(player) {
-  const enemyPool = player.mapKey === "night_city" ? NIGHT_CITY_ENEMIES : ENEMIES;
-  const baseEnemy = pick(enemyPool);
+  const baseEnemy = pick(ENEMIES);
   const hp = baseEnemy.hp + player.floor * 3;
   const enemy = {
     ...baseEnemy,
@@ -807,10 +750,10 @@ function startCombat(player) {
   player.combat = enemy;
   setPlayer(player);
   return {
-    title: player.mapKey === "night_city" ? "夜城遭遇" : "遭遇敵人",
+    title: "遭遇敵人",
     text: [
-      `${enemy.icon} 你在${player.mapKey === "night_city" ? "夜城" : "地下城"}第 ${player.floor} 層撞見了 ${enemy.name}！`,
-      player.mapKey === "night_city" ? "🌃 霓虹燈閃爍，敵人的戰鬥模組開始運作。" : "⚔️ 空氣突然變得很吵，戰鬥開始。",
+      `${enemy.icon} 你在第 ${player.floor} 層撞見了 ${enemy.name}！`,
+      "⚔️ 空氣突然變得很吵，戰鬥開始。",
       combatLine(player)
     ].join("\n")
   };
@@ -864,10 +807,7 @@ function combatTurn(player, action) {
   } else if (action === "defend") {
     lines.push("🛡️ 你架起防禦，準備硬扛。");
   } else {
-    const blindedMiss = consumeBlindDebuff(player, lines);
-    if (blindedMiss) {
-      // 敵人仍會反擊。
-    } else if (Math.random() < gamblerInstantKillChance(player)) {
+    if (Math.random() < gamblerInstantKillChance(player)) {
       enemy.hp = 0;
       lines.push(`🍀 賭命爆擊！你抓到命運破綻，直接秒殺 ${enemy.name}。`);
     } else {
@@ -904,7 +844,6 @@ function combatTurn(player, action) {
   player.hp -= counter;
   lines.push(`${enemy.icon} ${enemy.name} 反擊，造成 ${counter} 傷害。`);
   applyBossDebuff(player, enemy, lines);
-  applyNightCitySkill(player, enemy, lines);
 
   applyTurnRegen(player, lines);
 
@@ -1183,7 +1122,6 @@ function statusText(player) {
   return [
     `${classIcon} 職業：${player.classLabel}`,
     `${state.icon} 狀態：${state.label}`,
-    `🗺️ 地圖：${player.mapLabel ?? MAPS.dungeon.label}`,
     `🚪 層數：${player.floor}`,
     player.combat ? `👹 戰鬥：${player.combat.name} ${player.combat.hp}/${player.combat.maxHp} HP` : "👹 戰鬥：無",
     `❤️ HP：${player.hp}/${player.maxHp}`,
@@ -1211,7 +1149,6 @@ loadPlayers();
 
 module.exports = {
   CLASSES,
-  MAPS,
   CLASS_EMOJI,
   ITEM_DEFS,
   RELICS,
