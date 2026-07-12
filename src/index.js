@@ -19,7 +19,7 @@ const {
   statusText,
   useItem
 } = require("./game");
-const { actionButtons, buffMenu, classMenu, combatButtons, gameEmbed, gameFiles, hiddenRoomButtons, inventoryMenu, mapMenu, shopMenu } = require("./components");
+const { actionButtons, buffMenu, classMenu, combatButtons, gameEmbed, gameFiles, hiddenRoomButtons, inventoryMenu, mapMenu, shopMenu, shopQuantityMenu } = require("./components");
 const { startDashboard } = require("./dashboard");
 
 const token = process.env.DISCORD_TOKEN;
@@ -61,6 +61,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith("map_select:")) {
       await handleMapSelect(interaction);
+      return;
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith("shop_quantity:")) {
+      await handleShopQuantity(interaction);
       return;
     }
 
@@ -355,14 +360,31 @@ async function handleShopSelect(interaction) {
     await interaction.reply({ content: "這不是你的商店選單。", ephemeral: true });
     return;
   }
+  const itemId = interaction.values[0];
+  const item = require("./game").SHOP_ITEMS[itemId];
+  await interaction.update({
+    content: `${item.icon} ${item.label}｜單價 ${item.cost} 金幣｜請選擇數量。`,
+    embeds: [],
+    components: [shopQuantityMenu(itemId, interaction.user.id)]
+  });
+}
+
+async function handleShopQuantity(interaction) {
+  const [, ownerId = "global", itemId] = interaction.customId.split(":");
+  if (ownerId !== "global" && ownerId !== interaction.user.id) {
+    await interaction.reply({ content: "這不是你的商店選單。", ephemeral: true });
+    return;
+  }
+  await interaction.deferUpdate();
   const player = getPlayer(interaction.user.id);
-  const result = buyShopItem(player, interaction.values[0]);
+  const quantity = Number.parseInt(interaction.values[0], 10);
+  const result = buyShopItem(player, itemId, quantity);
   const updated = getPlayer(interaction.user.id);
-  await interaction.reply({
+  await interaction.editReply({
+    content: "",
     embeds: [gameEmbed(result.title, result.text, updated)],
     files: gameFiles(updated),
-    components: updated?.alive ? [shopMenu(interaction.user.id)] : [],
-    ephemeral: true
+    components: updated?.alive ? [shopMenu(interaction.user.id)] : []
   });
 }
 

@@ -38,19 +38,32 @@ const CLASSES = {
     relics: [],
     description: "初始幸運5%；攻擊可秒殺，敵人也有1%秒殺你。",
     starterWeapon: "rat"
+  },
+  ranger: {
+    label: "遊俠",
+    hp: 30,
+    maxHp: 30,
+    atk: 8,
+    def: 1,
+    gold: 0,
+    relics: [],
+    description: "初始武器攻擊+3；25%閃避敵人傷害並發動強力反擊。",
+    starterWeapon: "ranger"
   }
 };
 
 const CLASS_EMOJI = {
   blade: "🗡️",
   spark: "🔮",
-  rat: "🍀"
+  rat: "🍀",
+  ranger: "🏹"
 };
 
 const STARTER_WEAPONS = {
   blade: { name: "新手長劍", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 3, effects: [] },
   spark: { name: "新手法杖", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 4, effects: [] },
-  rat: { name: "新手短刀", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 2, effects: [] }
+  rat: { name: "新手短刀", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 2, effects: [] },
+  ranger: { name: "遊俠短弓", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 3, effects: [] }
 };
 
 const START_BUFFS = {
@@ -170,7 +183,8 @@ const NIGHT_CITY_ENEMIES = [
 ];
 
 const ELITE_ENEMIES = [
-  { name: "女僕劍士", hp: 38, atk: 9, gold: 22, elite: true }
+  { name: "女僕劍士", hp: 38, atk: 9, gold: 22, elite: true },
+  { name: "深淵處刑者", hp: 44, atk: 10, gold: 26, elite: true }
 ];
 
 const BOSSES = [
@@ -198,7 +212,8 @@ const ENEMY_EMOJI = {
   "街頭駭客": "💻",
   "霓虹無人機": "🚁",
   "企業鎮暴兵": "🤖",
-  "義體殺手": "🥷"
+  "義體殺手": "🥷",
+  "深淵處刑者": "⚔️"
 };
 
 const ENEMY_ART = {
@@ -220,6 +235,7 @@ function enemyImageFile(enemy) {
     "加班怨靈": "enemy-ghost.gif",
     "寶箱模仿怪": "enemy-mimic.gif",
     "女僕劍士": "enemy-elite-maid.png",
+    "深淵處刑者": "enemy-elite-executioner.mp4",
     "慣老闆": "enemy-boss.gif",
     "雷同事": "enemy-coworker.gif",
     "難搞的客戶": "enemy-client.gif",
@@ -755,7 +771,7 @@ function startHiddenBossCombat(player, fleeChance) {
 }
 
 function shouldSpawnElite(player) {
-  return player.floor >= 4 && Math.random() < 0.12;
+  return player.mapKey !== "night_city" && player.floor >= 4 && Math.random() < 0.15;
 }
 
 function startEliteCombat(player) {
@@ -834,6 +850,7 @@ function explore(player) {
   if (player.combat) return currentCombat(player);
   if (shouldSpawnBoss(player)) return startBossCombat(player);
   if (shouldFindHiddenRoom(player)) return findHiddenRoom(player);
+  if (shouldSpawnElite(player)) return startEliteCombat(player);
 
   const eventRoll = Math.random();
   if (eventRoll < 0.58) return startCombat(player);
@@ -893,6 +910,15 @@ function combatTurn(player, action) {
 
   const guard = action === "defend" ? 6 : 0;
   tickWeakDebuff(player);
+  if (player.classKey === "ranger" && Math.random() < 0.25) {
+    const counterDamage = Math.max(12, attackPower(player) * 2 + 8 + roll(8) - 1);
+    enemy.hp -= counterDamage;
+    lines.push(`🏹 遊俠本能觸發！你閃避了 ${enemy.name} 的攻擊並爆擊反擊，造成 ${counterDamage} 傷害。`);
+    if (enemy.hp <= 0) return finishCombatWin(player, enemy, lines);
+    enemy.round += 1;
+    setPlayer(player);
+    return { title: "閃避爆擊", text: `${lines.join("\n")}\n${combatLine(player)}` };
+  }
   if (Math.random() < enemyInstantKillChance(enemy)) {
     return finishPlayerDeath(player, [
       ...lines,
@@ -1128,34 +1154,38 @@ function useItem(player, itemId) {
   return { title: "使用道具", text: lines.join("\n") };
 }
 
-function buyShopItem(player, itemId) {
+function buyShopItem(player, itemId, quantity = 1) {
   if (!player?.alive) return { title: "無法購買", text: "你目前沒有進行中的冒險。" };
   if (player.combat) return { title: "無法購買", text: "戰鬥中不能逛商店。" };
   const item = SHOP_ITEMS[itemId];
   if (!item) return { title: "沒有商品", text: "商店沒有這個東西。" };
-  if (player.gold < item.cost) return { title: "金幣不足", text: `${item.label} 需要 ${item.cost} 金幣。` };
+  quantity = Math.max(1, Math.min(10, Number.parseInt(quantity, 10) || 1));
+  const totalCost = item.cost * quantity;
+  if (player.gold < totalCost) return { title: "金幣不足", text: `${item.label} x${quantity} 需要 ${totalCost} 金幣。` };
 
-  player.gold -= item.cost;
+  player.gold -= totalCost;
   let text = "";
   if (ITEM_DEFS[itemId]) {
-    addItem(player, itemId);
-    text = `${item.icon} ${item.label} 已放入背包。`;
+    addItem(player, itemId, quantity);
+    text = `${item.icon} ${item.label} x${quantity} 已放入背包。`;
   } else if (itemId === "whetstone") {
-    player.atk += 1;
-    text = "⚔️ 你用磨刀石擦出火花，攻擊 +1。";
+    player.atk += quantity;
+    text = `⚔️ 使用 ${quantity} 個磨刀石，攻擊 +${quantity}。`;
   } else if (itemId === "armor") {
-    player.def += 1;
-    text = "🛡️ 你把補丁護甲扣上去，防禦 +1。";
+    player.def += quantity;
+    text = `🛡️ 裝上 ${quantity} 件補丁護甲，防禦 +${quantity}。`;
   } else if (itemId === "heart") {
-    player.maxHp += 4;
-    heal(player, 4);
-    text = "❤️ 你吞下心之碎片，最大 HP +4，回復 4 HP。";
+    player.maxHp += 4 * quantity;
+    heal(player, 4 * quantity);
+    text = `❤️ 使用 ${quantity} 個心之碎片，最大 HP +${4 * quantity}，回復 ${4 * quantity} HP。`;
   } else if (itemId === "relic") {
-    text = addRelic(player, pick(Object.keys(RELICS)));
+    const relicLines = [];
+    for (let i = 0; i < quantity; i += 1) relicLines.push(addRelic(player, pick(Object.keys(RELICS))));
+    text = relicLines.filter(Boolean).join("\n");
   }
 
   setPlayer(player);
-  return { title: "購買成功", text: `${item.icon} 花費 ${item.cost} 金幣買下 ${item.label}。\n${text}` };
+  return { title: "購買成功", text: `${item.icon} 花費 ${totalCost} 金幣買下 ${item.label} x${quantity}。\n${text}` };
 }
 
 function shopText(player) {

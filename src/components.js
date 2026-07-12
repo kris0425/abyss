@@ -204,6 +204,26 @@ function shopMenu(ownerId = "global") {
   );
 }
 
+function shopQuantityMenu(itemId, ownerId = "global") {
+  const item = SHOP_ITEMS[itemId];
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`shop_quantity:${ownerId}:${itemId}`)
+      .setPlaceholder(`選擇購買數量｜單價 ${item.cost} 金幣`)
+      .addOptions(
+        Array.from({ length: 10 }, (_, index) => {
+          const quantity = index + 1;
+          return {
+            label: `${quantity} 個｜共 ${item.cost * quantity} 金幣`,
+            value: String(quantity),
+            emoji: item.icon,
+            description: `${item.label} x${quantity}`
+          };
+        })
+      )
+  );
+}
+
 function inventoryMenu(player, ownerId = "global") {
   const entries = Object.entries(player?.items ?? {}).filter(([, amount]) => amount > 0);
   const menu = new StringSelectMenuBuilder()
@@ -261,5 +281,6 @@ module.exports = {
   hiddenRoomButtons,
   inventoryMenu,
   mapMenu,
-  shopMenu
+  shopMenu,
+  shopQuantityMenu
 };
