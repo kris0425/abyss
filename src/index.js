@@ -7,6 +7,7 @@ const {
   combatTurn,
   createPlayer,
   deletePlayer,
+  dockText,
   enterHiddenRoom,
   explore,
   getPlayer,
@@ -19,7 +20,7 @@ const {
   statusText,
   useItem
 } = require("./game");
-const { actionButtons, buffMenu, classMenu, combatButtons, gameEmbed, gameFiles, hiddenRoomButtons, inventoryMenu, mapMenu, shopMenu, shopQuantityMenu } = require("./components");
+const { actionButtons, buffMenu, classMenu, combatButtons, dockButton, gameEmbed, gameFiles, hiddenRoomButtons, inventoryMenu, mapMenu, shopMenu, shopQuantityMenu } = require("./components");
 const { startDashboard } = require("./dashboard");
 
 const token = process.env.DISCORD_TOKEN;
@@ -276,6 +277,14 @@ async function handleButton(interaction) {
     return;
   }
 
+  if (action === "dock") {
+    await interaction.reply({
+      embeds: [gameEmbed("玩家船塢", dockText(player), player)],
+      ephemeral: true
+    });
+    return;
+  }
+
   if (!player?.alive) {
     await interaction.reply({ content: "你目前沒有活著的冒險。用 `/start` 再開一局。", ephemeral: true });
     return;
@@ -444,7 +453,7 @@ function controlsFor(player, ownerId) {
   if (!player?.alive) return [];
   if (player.combat) return [combatButtons(false, ownerId)];
   if (player.hiddenRoom) return [hiddenRoomButtons(false, ownerId)];
-  return [actionButtons(false, ownerId)];
+  return [actionButtons(false, ownerId), dockButton(false, ownerId)];
 }
 
 client.login(token);

@@ -343,12 +343,24 @@ function syncLeaderboardFromPlayers() {
 }
 
 function getPlayer(id) {
-  return players[id] ?? null;
+  const player = players[id] ?? null;
+  if (player) ensureDock(player);
+  return player;
 }
 
 function setPlayer(player) {
+  ensureDock(player);
   players[player.id] = player;
   savePlayers();
+}
+
+function ensureDock(player) {
+  if (!player) return player;
+  if (!Array.isArray(player.ships)) player.ships = [];
+  if (!Number.isInteger(player.dockCapacity) || player.dockCapacity < 1) {
+    player.dockCapacity = 3;
+  }
+  return player;
 }
 
 function deletePlayer(id) {
@@ -391,6 +403,8 @@ function createPlayer(id, classKey, buffKey = "attack", mapKey = "dungeon") {
     alive: true,
     relics: [...(base.relics ?? [])],
     items: { potion: 1 },
+    ships: [],
+    dockCapacity: 3,
     weapon: { ...(STARTER_WEAPONS[base.starterWeapon] ?? STARTER_WEAPONS.blade) },
     startBuff: START_BUFFS[buffKey]?.label ?? START_BUFFS.attack.label,
     mapKey: MAPS[mapKey] ? mapKey : "dungeon",
@@ -1211,6 +1225,18 @@ function inventoryText(player) {
   return entries.map(([id, amount]) => `${ITEM_DEFS[id]?.icon ?? "❔"} ${ITEM_DEFS[id]?.label ?? id} x${amount}`).join("\n");
 }
 
+function dockText(player) {
+  if (!player) return "先使用 /start 開始冒險。";
+  ensureDock(player);
+  const slots = Array.from({ length: player.dockCapacity }, (_, index) => {
+    const ship = player.ships[index];
+    if (!ship) return `▫️ ${index + 1} 號泊位：空置`;
+    const name = typeof ship === "string" ? ship : ship.name;
+    return `🚢 ${index + 1} 號泊位：${name || "未命名船隻"}`;
+  });
+  return [`⚓ 船塢容量：${player.ships.length}/${player.dockCapacity}`, ...slots].join("\n");
+}
+
 function statusText(player) {
   if (!player) return "沒有進行中的冒險。";
   const state = healthState(player);
@@ -1232,6 +1258,7 @@ function statusText(player) {
     `🎁 開局祝福：${player.startBuff ?? "無"}`,
     `🗡️ 武器：${weaponText(player)}`,
     `🎒 道具：${Object.values(player.items ?? {}).reduce((sum, amount) => sum + amount, 0)} 件`,
+    `⚓ 船塢：${player.ships?.length ?? 0}/${player.dockCapacity ?? 3}`,
     `🪙 金幣：${player.gold}`,
     `🏆 擊殺：${player.kills}`,
     `✨ 遺物：${relicNames}`
@@ -1264,6 +1291,7 @@ module.exports = {
   combatTurn,
   createPlayer,
   deletePlayer,
+  dockText,
   enterHiddenRoom,
   explore,
   getPlayer,

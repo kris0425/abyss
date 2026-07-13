@@ -150,6 +150,16 @@ function actionButtons(disabled = false, ownerId = "global") {
   );
 }
 
+function dockButton(disabled = false, ownerId = "global") {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`dock:${ownerId}`)
+      .setLabel("⚓ 船塢")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(disabled)
+  );
+}
+
 function combatButtons(disabled = false, ownerId = "global") {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -217,7 +227,8 @@ function shopQuantityMenu(itemId, ownerId = "global") {
             label: `${quantity} 個｜共 ${item.cost * quantity} 金幣`,
             value: String(quantity),
             emoji: item.icon,
-            description: `${item.label} x${quantity}`
+            description: quantity === 1 ? `${item.label} x1（預設）` : `${item.label} x${quantity}`,
+            default: quantity === 1
           };
         })
       )
@@ -276,6 +287,7 @@ module.exports = {
   buffMenu,
   classMenu,
   combatButtons,
+  dockButton,
   gameEmbed,
   gameFiles,
   hiddenRoomButtons,
