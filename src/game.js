@@ -179,7 +179,10 @@ const NIGHT_CITY_ENEMIES = [
   { name: "街頭駭客", hp: 17, atk: 5, gold: 7, skills: ["hack", "blind"] },
   { name: "霓虹無人機", hp: 20, atk: 6, gold: 8, skills: ["blind", "paralyze"] },
   { name: "企業鎮暴兵", hp: 25, atk: 7, gold: 10, skills: ["stun", "paralyze"] },
-  { name: "義體殺手", hp: 29, atk: 9, gold: 14, skills: ["hack", "blind", "stun"] }
+  { name: "義體殺手", hp: 29, atk: 9, gold: 14, skills: ["hack", "blind", "stun"] },
+  { name: "電磁寶箱怪", hp: 25, atk: 7, gold: 13, skills: ["hack", "blind"] },
+  { name: "義體骷髏兵", hp: 27, atk: 8, gold: 12, skills: ["stun", "paralyze"] },
+  { name: "數位怨靈", hp: 23, atk: 9, gold: 14, skills: ["hack", "blind", "paralyze"] }
 ];
 
 const ELITE_ENEMIES = [
@@ -213,7 +216,10 @@ const ENEMY_EMOJI = {
   "霓虹無人機": "🚁",
   "企業鎮暴兵": "🤖",
   "義體殺手": "🥷",
-  "深淵處刑者": "⚔️"
+  "深淵處刑者": "⚔️",
+  "電磁寶箱怪": "📦",
+  "義體骷髏兵": "💀",
+  "數位怨靈": "👻"
 };
 
 const ENEMY_ART = {
@@ -236,6 +242,9 @@ function enemyImageFile(enemy) {
     "寶箱模仿怪": "enemy-mimic.gif",
     "女僕劍士": "enemy-elite-maid.png",
     "深淵處刑者": "enemy-elite-executioner.gif",
+    "電磁寶箱怪": "enemy-night-chest.gif",
+    "義體骷髏兵": "enemy-night-skeleton.gif",
+    "數位怨靈": "enemy-night-ghost.gif",
     "慣老闆": "enemy-boss.gif",
     "雷同事": "enemy-coworker.gif",
     "難搞的客戶": "enemy-client.gif",
