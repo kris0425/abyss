@@ -76,8 +76,23 @@ const ITEM_DEFS = {
   potion: { label: "小補藥", icon: "🧪", description: "使用後回復 12 HP。" },
   feast: { label: "地城便當", icon: "🍱", description: "使用後回復 25 HP。" },
   bomb: { label: "裂片炸彈", icon: "💣", description: "戰鬥中造成 12 傷害。" },
-  smoke: { label: "煙霧彈", icon: "💨", description: "戰鬥中逃離敵人，但不獲得獎勵。" }
+  smoke: { label: "煙霧彈", icon: "💨", description: "戰鬥中逃離敵人，但不獲得獎勵。" },
+  bait: { label: "魚餌", icon: "🪱", description: "釣魚時消耗 1 個。" }
 };
+
+const GEAR_QUALITIES = {
+  common: { label: "普通", icon: "⚪", bonus: [1, 2], weight: 55 },
+  rare: { label: "稀有", icon: "🔵", bonus: [2, 4], weight: 28 },
+  epic: { label: "史詩", icon: "🟣", bonus: [4, 6], weight: 13 },
+  legendary: { label: "傳奇", icon: "🟡", bonus: [6, 9], weight: 4 }
+};
+
+const FISH_TABLE = [
+  { name: "破布小魚", icon: "🐟", gold: [2, 4], weight: 48 },
+  { name: "霓虹鯉魚", icon: "🐠", gold: [5, 9], weight: 30 },
+  { name: "裝甲鮪魚", icon: "🐡", gold: [10, 16], weight: 16 },
+  { name: "深淵金龍魚", icon: "🐉", gold: [24, 40], weight: 6 }
+];
 
 const WEAPON_QUALITIES = {
   common: { label: "普通", icon: "⚪", bonus: [1, 2], effectCount: 0, weight: 55 },
@@ -157,6 +172,7 @@ const SHOP_ITEMS = {
   feast: { label: "地城便當", icon: "🍱", cost: 16, description: "放入背包，使用後回復 25 HP。" },
   bomb: { label: "裂片炸彈", icon: "💣", cost: 13, description: "放入背包，戰鬥中造成 12 傷害。" },
   smoke: { label: "煙霧彈", icon: "💨", cost: 10, description: "放入背包，戰鬥中逃離敵人。" },
+  bait: { label: "魚餌", icon: "🪱", cost: 3, description: "釣魚時消耗 1 個，預設購買 1 個。" },
   whetstone: { label: "磨刀石", icon: "⚔️", cost: 14, description: "永久攻擊 +1。" },
   armor: { label: "補丁護甲", icon: "🛡️", cost: 14, description: "永久防禦 +1。" },
   heart: { label: "心之碎片", icon: "❤️", cost: 18, description: "最大 HP +4，並回復 4 HP。" },
@@ -360,6 +376,10 @@ function ensureDock(player) {
   if (!Number.isInteger(player.dockCapacity) || player.dockCapacity < 1) {
     player.dockCapacity = 3;
   }
+  player.equipment ??= {};
+  player.equipment.armor ??= { name: "新手皮甲", slot: "armor", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 0, defense: 1 };
+  player.equipment.rod ??= { name: "木製釣竿", slot: "rod", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", fishing: 0 };
+  if (!Array.isArray(player.equipmentBag)) player.equipmentBag = [];
   return player;
 }
 
@@ -402,9 +422,14 @@ function createPlayer(id, classKey, buffKey = "attack", mapKey = "dungeon") {
     kills: 0,
     alive: true,
     relics: [...(base.relics ?? [])],
-    items: { potion: 1 },
+    items: { potion: 1, bait: 3 },
     ships: [],
     dockCapacity: 3,
+    equipment: {
+      armor: { name: "新手皮甲", slot: "armor", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 0, defense: 1 },
+      rod: { name: "木製釣竿", slot: "rod", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", fishing: 0 }
+    },
+    equipmentBag: [],
     weapon: { ...(STARTER_WEAPONS[base.starterWeapon] ?? STARTER_WEAPONS.blade) },
     startBuff: START_BUFFS[buffKey]?.label ?? START_BUFFS.attack.label,
     mapKey: MAPS[mapKey] ? mapKey : "dungeon",
@@ -554,8 +579,16 @@ function finishPlayerDeath(player, lines) {
   return { title: "冒險失敗", text: lines.join("\n") };
 }
 function attackPower(player) {
-  const base = player.atk + (player.weapon?.attack ?? 0);
+  const base = player.atk + (player.weapon?.attack ?? 0) + equipmentAttackBonus(player);
   return player.debuffs?.weak > 0 ? Math.max(1, Math.floor(base / 2)) : base;
+}
+
+function equipmentAttackBonus(player) {
+  return Object.values(player?.equipment ?? {}).reduce((sum, gear) => sum + (gear?.attack ?? 0), 0);
+}
+
+function equipmentDefenseBonus(player) {
+  return Object.values(player?.equipment ?? {}).reduce((sum, gear) => sum + (gear?.defense ?? 0), 0);
 }
 
 function gamblerInstantKillChance(player) {
@@ -949,7 +982,7 @@ function combatTurn(player, action) {
     ]);
   }
 
-  const counter = Math.max(1, enemy.atk + roll(3) - 2 - player.def - guard);
+  const counter = Math.max(1, enemy.atk + roll(3) - 2 - player.def - equipmentDefenseBonus(player) - guard);
   player.hp -= counter;
   lines.push(`${enemy.icon} ${enemy.name} 反擊，造成 ${counter} 傷害。`);
   applyBossDebuff(player, enemy, lines);
@@ -1032,6 +1065,8 @@ function finishCombatWin(player, enemy, lines) {
     if (player.kills % 3 === 0) lines.push(addRelic(player, pick(Object.keys(RELICS))));
     const weaponLine = maybeDropWeapon(player);
     if (weaponLine) lines.push(weaponLine);
+    const gearLine = maybeDropGear(player);
+    if (gearLine) lines.push(gearLine);
   }
 
   const completed = completeRun(player, lines);
@@ -1081,6 +1116,108 @@ function generateWeapon(floor, epicOnly = false) {
     attack: min + roll(max - min + 1) + Math.floor(floor / 3),
     effects: pickEffects(quality.effectCount)
   };
+}
+
+function generateGear(floor, forcedSlot = null) {
+  const qualityKey = weightedPick(Object.entries(GEAR_QUALITIES).map(([key, value]) => ({ key, weight: value.weight }))).key;
+  const quality = GEAR_QUALITIES[qualityKey];
+  const slot = forcedSlot ?? pick(["armor", "accessory"]);
+  const [min, max] = quality.bonus;
+  const bonus = min + roll(max - min + 1) - 1 + Math.floor(floor / 10);
+  const names = slot === "armor"
+    ? ["拾荒者護甲", "霓虹戰術衣", "深淵重甲", "守門人外骨骼"]
+    : ["幸運魚鉤", "駭客護符", "猩紅徽章", "深淵羅盤"];
+  return {
+    name: pick(names), slot, quality: qualityKey, qualityLabel: quality.label, qualityIcon: quality.icon,
+    attack: slot === "accessory" ? Math.max(1, Math.floor(bonus / 2)) : 0,
+    defense: slot === "armor" ? bonus : 0,
+    fishing: slot === "rod" ? bonus : slot === "accessory" ? Math.max(1, Math.floor(bonus / 2)) : 0
+  };
+}
+
+function gearPower(gear) {
+  return (gear?.attack ?? 0) + (gear?.defense ?? 0) + (gear?.fishing ?? 0);
+}
+
+function gearText(gear) {
+  if (!gear) return "無";
+  const stats = [];
+  if (gear.attack) stats.push(`攻擊 +${gear.attack}`);
+  if (gear.defense) stats.push(`防禦 +${gear.defense}`);
+  if (gear.fishing) stats.push(`釣魚幸運 +${gear.fishing}`);
+  return `${gear.qualityIcon ?? "⚪"}${gear.qualityLabel ?? "普通"} ${gear.name}（${stats.join("、") || "無加成"}）`;
+}
+
+function storeOrEquipGear(player, gear) {
+  ensureDock(player);
+  const current = player.equipment[gear.slot];
+  if (!current || gearPower(gear) > gearPower(current)) {
+    if (current) player.equipmentBag.push(current);
+    player.equipment[gear.slot] = gear;
+    return `🧰 獲得裝備：${gearText(gear)}，已自動裝備。`;
+  }
+  player.equipmentBag.push(gear);
+  return `🧰 獲得裝備：${gearText(gear)}，已放入裝備庫。`;
+}
+
+function maybeDropGear(player) {
+  const chance = 0.12 + Math.min(0.12, (player.luck ?? 0) * 0.01);
+  if (Math.random() > chance) return null;
+  return storeOrEquipGear(player, generateGear(player.floor));
+}
+
+function fish(player) {
+  if (!player?.alive) return { title: "無法釣魚", text: "目前沒有進行中的冒險。" };
+  if (player.combat || player.hiddenRoom) return { title: "無法釣魚", text: "先離開目前的危險區域。" };
+  if (!removeItem(player, "bait")) return { title: "沒有魚餌", text: "🪱 魚餌用完了，請到商店購買。" };
+
+  ensureDock(player);
+  const fishingLuck = (player.luck ?? 0) + (player.equipment.rod?.fishing ?? 0) + (player.equipment.accessory?.fishing ?? 0);
+  const lines = ["🎣 你在船塢放下釣線，消耗 1 個魚餌。"];
+  if (Math.random() < 0.12 + Math.min(0.2, fishingLuck * 0.01)) {
+    const slot = Math.random() < 0.55 ? "rod" : "accessory";
+    const gear = generateGear(player.floor, slot);
+    if (slot === "rod") {
+      gear.name = pick(["碳纖維釣竿", "霓虹脈衝竿", "深淵獵魚竿"]);
+      gear.attack = 0;
+      gear.defense = 0;
+      gear.fishing = Math.max(2, gear.fishing + 2);
+    }
+    lines.push(storeOrEquipGear(player, gear));
+  } else {
+    const fishCatch = weightedPick(FISH_TABLE);
+    const [minGold, maxGold] = fishCatch.gold;
+    const gold = minGold + roll(maxGold - minGold + 1) - 1 + Math.floor(fishingLuck / 5);
+    player.gold += gold;
+    player.fishCaught = (player.fishCaught ?? 0) + 1;
+    lines.push(`${fishCatch.icon} 釣到「${fishCatch.name}」，交給碼頭商人後獲得 ${gold} 金幣。`);
+  }
+  setPlayer(player);
+  return { title: "釣魚結果", text: lines.join("\n") };
+}
+
+function equipmentText(player) {
+  if (!player) return "先使用 /start 開始冒險。";
+  ensureDock(player);
+  return [
+    `🛡️ 防具：${gearText(player.equipment.armor)}`,
+    `💍 飾品：${gearText(player.equipment.accessory)}`,
+    `🎣 釣竿：${gearText(player.equipment.rod)}`,
+    `📦 裝備庫：${player.equipmentBag.length} 件`,
+    `🐟 累計釣魚：${player.fishCaught ?? 0} 次`
+  ].join("\n");
+}
+
+function equipStoredGear(player, index) {
+  ensureDock(player);
+  const gear = player.equipmentBag[index];
+  if (!gear) return { title: "裝備不存在", text: "這件裝備可能已經被換走了。" };
+  const current = player.equipment[gear.slot];
+  player.equipment[gear.slot] = gear;
+  player.equipmentBag.splice(index, 1);
+  if (current) player.equipmentBag.push(current);
+  setPlayer(player);
+  return { title: "更換裝備", text: `✅ 已裝備 ${gearText(gear)}。` };
 }
 
 function pickEffects(count) {
@@ -1252,13 +1389,14 @@ function statusText(player) {
     `🚪 層數：${player.floor}`,
     player.combat ? `👹 戰鬥：${player.combat.name} ${player.combat.hp}/${player.combat.maxHp} HP` : "👹 戰鬥：無",
     `❤️ HP：${player.hp}/${player.maxHp}`,
-    `⚔️ 攻擊 / 🛡️ 防禦：${attackPower(player)}/${player.def}`,
+    `⚔️ 攻擊 / 🛡️ 防禦：${attackPower(player)}/${player.def + equipmentDefenseBonus(player)}`,
     `🍀 幸運：${player.luck ?? 0}%`,
     `🧿 負面狀態：${debuffs}`,
     `🎁 開局祝福：${player.startBuff ?? "無"}`,
     `🗡️ 武器：${weaponText(player)}`,
     `🎒 道具：${Object.values(player.items ?? {}).reduce((sum, amount) => sum + amount, 0)} 件`,
     `⚓ 船塢：${player.ships?.length ?? 0}/${player.dockCapacity ?? 3}`,
+    `🎣 釣魚：${player.fishCaught ?? 0} 次｜裝備庫：${player.equipmentBag?.length ?? 0} 件`,
     `🪙 金幣：${player.gold}`,
     `🏆 擊殺：${player.kills}`,
     `✨ 遺物：${relicNames}`
@@ -1292,8 +1430,11 @@ module.exports = {
   createPlayer,
   deletePlayer,
   dockText,
+  equipmentText,
+  equipStoredGear,
   enterHiddenRoom,
   explore,
+  fish,
   getPlayer,
   inventoryText,
   leaveHiddenRoom,

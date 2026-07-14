@@ -156,8 +156,37 @@ function dockButton(disabled = false, ownerId = "global") {
       .setCustomId(`dock:${ownerId}`)
       .setLabel("⚓ 船塢")
       .setStyle(ButtonStyle.Secondary)
+      .setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId(`fish:${ownerId}`)
+      .setLabel("🎣 釣魚")
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId(`equipment:${ownerId}`)
+      .setLabel("🧰 裝備")
+      .setStyle(ButtonStyle.Secondary)
       .setDisabled(disabled)
   );
+}
+
+function equipmentMenu(player, ownerId = "global") {
+  const entries = player?.equipmentBag ?? [];
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`equipment_select:${ownerId}`)
+    .setPlaceholder(entries.length ? "選擇要裝備的物品" : "裝備庫是空的")
+    .setDisabled(entries.length === 0);
+  if (!entries.length) {
+    menu.addOptions([{ label: "沒有備用裝備", value: "empty", description: "戰鬥或釣魚可取得裝備。" }]);
+  } else {
+    menu.addOptions(entries.slice(0, 25).map((gear, index) => ({
+      label: `${gear.qualityLabel ?? "普通"} ${gear.name}`.slice(0, 100),
+      value: String(index),
+      emoji: gear.slot === "armor" ? "🛡️" : gear.slot === "rod" ? "🎣" : "💍",
+      description: `攻擊+${gear.attack ?? 0}｜防禦+${gear.defense ?? 0}｜釣魚+${gear.fishing ?? 0}`
+    })));
+  }
+  return new ActionRowBuilder().addComponents(menu);
 }
 
 function combatButtons(disabled = false, ownerId = "global") {
@@ -288,6 +317,7 @@ module.exports = {
   classMenu,
   combatButtons,
   dockButton,
+  equipmentMenu,
   gameEmbed,
   gameFiles,
   hiddenRoomButtons,

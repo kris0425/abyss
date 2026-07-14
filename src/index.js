@@ -8,8 +8,11 @@ const {
   createPlayer,
   deletePlayer,
   dockText,
+  equipmentText,
+  equipStoredGear,
   enterHiddenRoom,
   explore,
+  fish,
   getPlayer,
   inventoryText,
   leaveHiddenRoom,
@@ -20,7 +23,7 @@ const {
   statusText,
   useItem
 } = require("./game");
-const { actionButtons, buffMenu, classMenu, combatButtons, dockButton, gameEmbed, gameFiles, hiddenRoomButtons, inventoryMenu, mapMenu, shopMenu, shopQuantityMenu } = require("./components");
+const { actionButtons, buffMenu, classMenu, combatButtons, dockButton, equipmentMenu, gameEmbed, gameFiles, hiddenRoomButtons, inventoryMenu, mapMenu, shopMenu, shopQuantityMenu } = require("./components");
 const { startDashboard } = require("./dashboard");
 
 const token = process.env.DISCORD_TOKEN;
@@ -77,6 +80,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith("item_select:")) {
       await handleItemSelect(interaction);
+      return;
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith("equipment_select:")) {
+      await handleEquipmentSelect(interaction);
       return;
     }
 
@@ -285,6 +293,15 @@ async function handleButton(interaction) {
     return;
   }
 
+  if (action === "equipment") {
+    await interaction.reply({
+      embeds: [gameEmbed("裝備系統", equipmentText(player), player)],
+      components: [equipmentMenu(player, interaction.user.id)],
+      ephemeral: true
+    });
+    return;
+  }
+
   if (!player?.alive) {
     await interaction.reply({ content: "你目前沒有活著的冒險。用 `/start` 再開一局。", ephemeral: true });
     return;
@@ -296,6 +313,17 @@ async function handleButton(interaction) {
     player.panelMessageId = interaction.message.id;
     setPlayer(player);
     const result = explore(player);
+    const updated = getPlayer(interaction.user.id);
+    await interaction.message.edit(panelEditOptions(result, updated, interaction.user.id));
+    return;
+  }
+
+  if (action === "fish") {
+    await interaction.deferUpdate();
+    player.panelChannelId = interaction.channelId;
+    player.panelMessageId = interaction.message.id;
+    setPlayer(player);
+    const result = fish(player);
     const updated = getPlayer(interaction.user.id);
     await interaction.message.edit(panelEditOptions(result, updated, interaction.user.id));
     return;
@@ -414,6 +442,27 @@ async function handleItemSelect(interaction) {
   await interaction.editReply({
     embeds: [gameEmbed(result.title, result.text, null)],
     components: updated?.alive ? [inventoryMenu(updated, interaction.user.id)] : []
+  });
+  await updateGamePanel(interaction, result, updated);
+}
+
+async function handleEquipmentSelect(interaction) {
+  const [, ownerId = "global"] = interaction.customId.split(":");
+  if (ownerId !== "global" && ownerId !== interaction.user.id) {
+    await interaction.reply({ content: "這不是你的裝備庫。", ephemeral: true });
+    return;
+  }
+  if (interaction.values[0] === "empty") {
+    await interaction.update({ content: "裝備庫目前是空的。", embeds: [], components: [] });
+    return;
+  }
+  await interaction.deferUpdate();
+  const player = getPlayer(interaction.user.id);
+  const result = equipStoredGear(player, Number.parseInt(interaction.values[0], 10));
+  const updated = getPlayer(interaction.user.id);
+  await interaction.editReply({
+    embeds: [gameEmbed(result.title, `${result.text}\n\n${equipmentText(updated)}`, updated)],
+    components: [equipmentMenu(updated, interaction.user.id)]
   });
   await updateGamePanel(interaction, result, updated);
 }
