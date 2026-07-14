@@ -87,12 +87,59 @@ const GEAR_QUALITIES = {
   legendary: { label: "傳奇", icon: "🟡", bonus: [6, 9], weight: 4 }
 };
 
+const FISH_RARITIES = {
+  common: { label: "普通", icon: "⚪" },
+  rare: { label: "稀有", icon: "🔵" },
+  epic: { label: "史詩", icon: "🟣" },
+  legendary: { label: "傳奇", icon: "🟡" }
+};
+
 const FISH_TABLE = [
-  { name: "破布小魚", icon: "🐟", gold: [2, 4], weight: 48 },
-  { name: "霓虹鯉魚", icon: "🐠", gold: [5, 9], weight: 30 },
-  { name: "裝甲鮪魚", icon: "🐡", gold: [10, 16], weight: 16 },
-  { name: "深淵金龍魚", icon: "🐉", gold: [24, 40], weight: 6 }
+  { name: "珊瑚小丑魚", rarity: "common", gold: [3, 5], weight: 12, imageFile: "pixel-fish-01.jpg" },
+  { name: "藍倒吊", rarity: "common", gold: [3, 6], weight: 12, imageFile: "pixel-fish-02.jpg" },
+  { name: "赤焰鬥魚", rarity: "rare", gold: [7, 11], weight: 6, imageFile: "pixel-fish-03.jpg" },
+  { name: "御庭錦鯉", rarity: "epic", gold: [14, 21], weight: 2.5, imageFile: "pixel-fish-04.jpg" },
+  { name: "毒棘獅子魚", rarity: "rare", gold: [8, 12], weight: 6, imageFile: "pixel-fish-05.jpg" },
+  { name: "黃金海馬", rarity: "rare", gold: [8, 13], weight: 6, imageFile: "pixel-fish-06.jpg" },
+  { name: "深海鮟鱇", rarity: "epic", gold: [16, 24], weight: 2.5, imageFile: "pixel-fish-07.jpg" },
+  { name: "星斑鯨鯊", rarity: "legendary", gold: [32, 48], weight: 0.7, imageFile: "pixel-fish-08.jpg" },
+  { name: "蒼海旗魚", rarity: "epic", gold: [15, 23], weight: 2.5, imageFile: "pixel-fish-09.jpg" },
+  { name: "黃金河豚", rarity: "rare", gold: [7, 12], weight: 6, imageFile: "pixel-fish-10.jpg" },
+  { name: "迷紋七彩神仙", rarity: "common", gold: [4, 7], weight: 12, imageFile: "pixel-fish-11.jpg" },
+  { name: "萬花麒麟魚", rarity: "epic", gold: [15, 22], weight: 2.5, imageFile: "pixel-fish-12.jpg" },
+  { name: "雨林巨骨舌魚", rarity: "epic", gold: [17, 25], weight: 2.5, imageFile: "pixel-fish-13.jpg" },
+  { name: "遠古腔棘魚", rarity: "legendary", gold: [35, 52], weight: 0.7, imageFile: "pixel-fish-14.jpg" },
+  { name: "深藍鬼蝠魟", rarity: "epic", gold: [16, 24], weight: 2.5, imageFile: "pixel-fish-15.jpg" },
+  { name: "雷光電鰻", rarity: "rare", gold: [9, 14], weight: 6, imageFile: "pixel-fish-16.jpg" },
+  { name: "黃鰭鮪魚", rarity: "common", gold: [4, 7], weight: 12, imageFile: "pixel-fish-17.jpg" },
+  { name: "血玉紅龍魚", rarity: "legendary", gold: [38, 55], weight: 0.7, imageFile: "pixel-fish-18.jpg" },
+  { name: "沼澤鱷雀鱔", rarity: "rare", gold: [9, 15], weight: 6, imageFile: "pixel-fish-19.jpg" },
+  { name: "霓虹蝦虎魚", rarity: "common", gold: [3, 6], weight: 12, imageFile: "pixel-fish-20.jpg" }
 ];
+
+const FISH_BUFFS = {
+  common: [
+    { text: "回復 5 HP", apply(player) { heal(player, 5); } },
+    { text: "額外獲得 2 金幣", apply(player) { player.gold += 2; } },
+    { text: "魚餌返還 1 個", apply(player) { addItem(player, "bait", 1); } }
+  ],
+  rare: [
+    { text: "最大 HP +1 並回復 6 HP", apply(player) { player.maxHp += 1; heal(player, 6); } },
+    { text: "防禦力永久 +1", apply(player) { player.def += 1; } },
+    { text: "幸運永久 +1", apply(player) { player.luck = (player.luck ?? 0) + 1; } }
+  ],
+  epic: [
+    { text: "攻擊力永久 +1", apply(player) { player.atk += 1; } },
+    { text: "最大 HP 永久 +3 並完全回復", apply(player) { player.maxHp += 3; player.hp = player.maxHp; } },
+    { text: "幸運永久 +2", apply(player) { player.luck = (player.luck ?? 0) + 2; } }
+  ],
+  legendary: [
+    { text: "攻擊力永久 +2", apply(player) { player.atk += 2; } },
+    { text: "防禦力永久 +2", apply(player) { player.def += 2; } },
+    { text: "最大 HP 永久 +6 並完全回復", apply(player) { player.maxHp += 6; player.hp = player.maxHp; } },
+    { text: "幸運永久 +3", apply(player) { player.luck = (player.luck ?? 0) + 3; } }
+  ]
+};
 
 const WEAPON_QUALITIES = {
   common: { label: "普通", icon: "⚪", bonus: [1, 2], effectCount: 0, weight: 55 },
@@ -572,6 +619,7 @@ function finishPlayerDeath(player, lines) {
   player.alive = false;
   player.sceneImageFile = "player-death.gif";
   player.sceneImageUrl = "attachment://player-death.gif";
+  player.sceneImageFolder = "enemies";
   delete player.combat;
   recordLeaderboard(player, "倒下");
   setPlayer(player);
@@ -651,6 +699,7 @@ function completeRun(player, lines = []) {
   delete player.combat;
   player.sceneImageFile = "victory-clear.png";
   player.sceneImageUrl = "attachment://victory-clear.png";
+  player.sceneImageFolder = "enemies";
   lines.push("🎉 通喜通關");
   lines.push(`🏁 你突破了 ${MAX_FLOOR} 層上限，這場冒險正式完結。`);
   recordLeaderboard(player, "通關");
@@ -891,6 +940,11 @@ function startCombat(player) {
 function explore(player) {
   if (player?.completed) return { title: "通喜通關", text: "🎉 通喜通關\n這場冒險已經完成。想重玩可以使用 /start。" };
   if (!player?.alive) return { title: "沒有進行中的冒險", text: "先使用 /start 開新局。" };
+  if (player.sceneImageFolder === "fishing") {
+    delete player.sceneImageFile;
+    delete player.sceneImageUrl;
+    delete player.sceneImageFolder;
+  }
   if (player.hiddenRoom) {
     return {
       title: "發現隱藏房間",
@@ -1051,6 +1105,7 @@ function finishCombatWin(player, enemy, lines) {
   delete player.combat;
   delete player.sceneImageFile;
   delete player.sceneImageUrl;
+  delete player.sceneImageFolder;
   lines.push(`🏆 擊敗 ${enemy.name}，獲得 ${enemy.gold} 枚金幣。`);
 
   if (hasRelic(player, "vampire_tooth")) lines.push(RELICS.vampire_tooth.onWin(player));
@@ -1169,11 +1224,27 @@ function maybeDropGear(player) {
 function fish(player) {
   if (!player?.alive) return { title: "無法釣魚", text: "目前沒有進行中的冒險。" };
   if (player.combat || player.hiddenRoom) return { title: "無法釣魚", text: "先離開目前的危險區域。" };
+  if (player.lastFishedFloor === player.floor) return { title: "本層已釣過魚", text: "🎣 每一層只能釣一次，探索到下一層後再來。" };
   if (!removeItem(player, "bait")) return { title: "沒有魚餌", text: "🪱 魚餌用完了，請到商店購買。" };
 
   ensureDock(player);
   const fishingLuck = (player.luck ?? 0) + (player.equipment.rod?.fishing ?? 0) + (player.equipment.accessory?.fishing ?? 0);
   const lines = ["🎣 你在船塢放下釣線，消耗 1 個魚餌。"];
+  const fishCatch = weightedPick(FISH_TABLE.map((entry) => ({ ...entry, weight: entry.weight * (entry.rarity === "common" ? 1 : 1 + fishingLuck * 0.025) })));
+  const rarity = FISH_RARITIES[fishCatch.rarity];
+  const [minGold, maxGold] = fishCatch.gold;
+  const gold = minGold + roll(maxGold - minGold + 1) - 1 + Math.floor(fishingLuck / 5);
+  const buff = pick(FISH_BUFFS[fishCatch.rarity]);
+  player.gold += gold;
+  player.fishCaught = (player.fishCaught ?? 0) + 1;
+  player.lastFishedFloor = player.floor;
+  buff.apply(player);
+  player.sceneImageFile = fishCatch.imageFile;
+  player.sceneImageUrl = `attachment://${fishCatch.imageFile}`;
+  player.sceneImageFolder = "fishing";
+  lines.push(`${rarity.icon}【${rarity.label}】釣到「${fishCatch.name}」，交給碼頭商人後獲得 ${gold} 金幣。`);
+  lines.push(`✨ 魚類增益：${buff.text}。`);
+
   if (Math.random() < 0.12 + Math.min(0.2, fishingLuck * 0.01)) {
     const slot = Math.random() < 0.55 ? "rod" : "accessory";
     const gear = generateGear(player.floor, slot);
@@ -1183,14 +1254,7 @@ function fish(player) {
       gear.defense = 0;
       gear.fishing = Math.max(2, gear.fishing + 2);
     }
-    lines.push(storeOrEquipGear(player, gear));
-  } else {
-    const fishCatch = weightedPick(FISH_TABLE);
-    const [minGold, maxGold] = fishCatch.gold;
-    const gold = minGold + roll(maxGold - minGold + 1) - 1 + Math.floor(fishingLuck / 5);
-    player.gold += gold;
-    player.fishCaught = (player.fishCaught ?? 0) + 1;
-    lines.push(`${fishCatch.icon} 釣到「${fishCatch.name}」，交給碼頭商人後獲得 ${gold} 金幣。`);
+    lines.push(`🎁 額外收穫：${storeOrEquipGear(player, gear)}`);
   }
   setPlayer(player);
   return { title: "釣魚結果", text: lines.join("\n") };
@@ -1305,6 +1369,7 @@ function useItem(player, itemId) {
     delete player.combat;
     delete player.sceneImageFile;
     delete player.sceneImageUrl;
+    delete player.sceneImageFolder;
     player.floor += 1;
     lines.push(`💨 你用煙霧彈逃離 ${enemyName}。`);
     const completed = completeRun(player, lines);

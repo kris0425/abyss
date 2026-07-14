@@ -219,6 +219,7 @@ async function handleAdminFloor(interaction) {
   delete player.hiddenRoom;
   delete player.sceneImageFile;
   delete player.sceneImageUrl;
+  delete player.sceneImageFolder;
   delete player.debuffs;
   setPlayer(player);
 

@@ -301,11 +301,13 @@ function embedColor(player) {
 }
 
 function gameFiles(player) {
-  const imageFile = player?.combat?.imageFile ?? player?.sceneImageFile;
+  const combatImage = player?.combat?.imageFile;
+  const imageFile = combatImage ?? player?.sceneImageFile;
   if (!imageFile) return [];
+  const folder = combatImage ? "enemies" : (player?.sceneImageFolder ?? "enemies");
   return [
     {
-      attachment: path.join(__dirname, "..", "assets", "enemies", imageFile),
+      attachment: path.join(__dirname, "..", "assets", folder, imageFile),
       name: imageFile
     }
   ];
