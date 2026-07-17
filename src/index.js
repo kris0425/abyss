@@ -18,12 +18,14 @@ const {
   leaveHiddenRoom,
   leaderboardText,
   rest,
+  selectOrBuyShip,
   setPlayer,
   shopText,
   statusText,
-  useItem
+  useItem,
+  voyage
 } = require("./game");
-const { actionButtons, buffMenu, classMenu, combatButtons, dockButton, equipmentMenu, gameEmbed, gameFiles, hiddenRoomButtons, inventoryMenu, mapMenu, shopMenu, shopQuantityMenu } = require("./components");
+const { actionButtons, buffMenu, classMenu, combatButtons, dockButton, equipmentMenu, gameEmbed, gameFiles, hiddenRoomButtons, inventoryMenu, mapMenu, shipMenu, shopMenu, shopQuantityMenu } = require("./components");
 const { startDashboard } = require("./dashboard");
 
 const token = process.env.DISCORD_TOKEN;
@@ -85,6 +87,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith("equipment_select:")) {
       await handleEquipmentSelect(interaction);
+      return;
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith("ship_select:")) {
+      await handleShipSelect(interaction);
       return;
     }
 
@@ -289,15 +296,18 @@ async function handleButton(interaction) {
   if (action === "dock") {
     await interaction.reply({
       embeds: [gameEmbed("玩家船塢", dockText(player), player)],
+      components: player?.alive ? [shipMenu(player, interaction.user.id)] : [],
       ephemeral: true
     });
     return;
   }
 
   if (action === "equipment") {
+    const preview = equipmentPreview(player);
     await interaction.reply({
-      embeds: [gameEmbed("裝備系統", equipmentText(player), player)],
+      embeds: [gameEmbed("裝備系統", equipmentText(player), preview)],
       components: [equipmentMenu(player, interaction.user.id)],
+      files: gameFiles(preview),
       ephemeral: true
     });
     return;
@@ -325,6 +335,17 @@ async function handleButton(interaction) {
     player.panelMessageId = interaction.message.id;
     setPlayer(player);
     const result = fish(player);
+    const updated = getPlayer(interaction.user.id);
+    await interaction.message.edit(panelEditOptions(result, updated, interaction.user.id));
+    return;
+  }
+
+  if (action === "voyage") {
+    await interaction.deferUpdate();
+    player.panelChannelId = interaction.channelId;
+    player.panelMessageId = interaction.message.id;
+    setPlayer(player);
+    const result = voyage(player);
     const updated = getPlayer(interaction.user.id);
     await interaction.message.edit(panelEditOptions(result, updated, interaction.user.id));
     return;
@@ -461,9 +482,29 @@ async function handleEquipmentSelect(interaction) {
   const player = getPlayer(interaction.user.id);
   const result = equipStoredGear(player, Number.parseInt(interaction.values[0], 10));
   const updated = getPlayer(interaction.user.id);
+  const preview = equipmentPreview(updated);
   await interaction.editReply({
-    embeds: [gameEmbed(result.title, `${result.text}\n\n${equipmentText(updated)}`, updated)],
-    components: [equipmentMenu(updated, interaction.user.id)]
+    embeds: [gameEmbed(result.title, `${result.text}\n\n${equipmentText(updated)}`, preview)],
+    components: [equipmentMenu(updated, interaction.user.id)],
+    attachments: [],
+    files: gameFiles(preview)
+  });
+  await updateGamePanel(interaction, result, updated);
+}
+
+async function handleShipSelect(interaction) {
+  const [, ownerId = "global"] = interaction.customId.split(":");
+  if (ownerId !== "global" && ownerId !== interaction.user.id) {
+    await interaction.reply({ content: "這不是你的船塢。", ephemeral: true });
+    return;
+  }
+  await interaction.deferUpdate();
+  const player = getPlayer(interaction.user.id);
+  const result = selectOrBuyShip(player, interaction.values[0]);
+  const updated = getPlayer(interaction.user.id);
+  await interaction.editReply({
+    embeds: [gameEmbed(result.title, `${result.text}\n\n${dockText(updated)}`, updated)],
+    components: updated?.alive ? [shipMenu(updated, interaction.user.id)] : []
   });
   await updateGamePanel(interaction, result, updated);
 }
@@ -480,6 +521,17 @@ async function updateGamePanel(interaction, result, player) {
 
 function currentImageFile(player) {
   return gameFiles(player)[0]?.name ?? null;
+}
+
+function equipmentPreview(player) {
+  const imageUrl = player?.equipment?.rod?.imageUrl;
+  if (!imageUrl) return player;
+  return {
+    ...player,
+    sceneImageFile: undefined,
+    sceneImageUrl: imageUrl,
+    sceneImageFolder: undefined
+  };
 }
 
 function panelEditOptions(result, player, ownerId) {

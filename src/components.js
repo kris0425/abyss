@@ -6,7 +6,7 @@ const {
   StringSelectMenuBuilder
 } = require("discord.js");
 const path = require("node:path");
-const { CLASSES, CLASS_EMOJI, ITEM_DEFS, MAPS, SHOP_ITEMS, START_BUFFS, healthState, statusText } = require("./game");
+const { CLASSES, CLASS_EMOJI, ITEM_DEFS, MAPS, SHIP_TYPES, SHOP_ITEMS, START_BUFFS, healthState, statusText } = require("./game");
 
 function gameEmbed(title, text, player) {
   const state = healthState(player);
@@ -166,8 +166,29 @@ function dockButton(disabled = false, ownerId = "global") {
       .setCustomId(`equipment:${ownerId}`)
       .setLabel("🧰 裝備")
       .setStyle(ButtonStyle.Secondary)
+      .setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId(`voyage:${ownerId}`)
+      .setLabel("🌊 出航")
+      .setStyle(ButtonStyle.Success)
       .setDisabled(disabled)
   );
+}
+
+function shipMenu(player, ownerId = "global") {
+  const ownedTypes = new Set((player?.ships ?? []).map((ship) => ship?.type));
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`ship_select:${ownerId}`)
+    .setPlaceholder("購買或切換出航船隻")
+    .addOptions(Object.entries(SHIP_TYPES).map(([type, info]) => ({
+      label: `${info.name}${player?.activeShip === type ? "（使用中）" : ""}`,
+      value: type,
+      emoji: info.icon,
+      description: ownedTypes.has(type)
+        ? `已擁有｜安全 ${Math.round(info.safety * 100)}%｜收益 x${info.reward}`
+        : `${info.cost} 金幣｜安全 ${Math.round(info.safety * 100)}%｜收益 x${info.reward}`
+    })));
+  return new ActionRowBuilder().addComponents(menu);
 }
 
 function equipmentMenu(player, ownerId = "global") {
@@ -325,6 +346,7 @@ module.exports = {
   hiddenRoomButtons,
   inventoryMenu,
   mapMenu,
+  shipMenu,
   shopMenu,
   shopQuantityMenu
 };

@@ -87,6 +87,41 @@ const GEAR_QUALITIES = {
   legendary: { label: "傳奇", icon: "🟡", bonus: [6, 9], weight: 4 }
 };
 
+const ROD_QUALITIES = {
+  common: { label: "普通", icon: "⚪", name: "木製釣竿", fishing: [1, 2], weight: 48, imageUrl: "https://lh3.googleusercontent.com/d/1SeZZ3RtSof94QTmmkY7lcEdhvr_-2K9y=w768" },
+  uncommon: { label: "優良", icon: "🟢", name: "翠葉釣竿", fishing: [2, 3], weight: 27, imageUrl: "https://lh3.googleusercontent.com/d/1aXzQUX3LFdACOnZQr26QGkQmdjNYOnk5=w768" },
+  rare: { label: "稀有", icon: "🔵", name: "星藍釣竿", fishing: [4, 5], weight: 16, imageUrl: "https://lh3.googleusercontent.com/d/1doSviv0KAiptPshVG5dfLhn5HR9LZKBW=w768" },
+  epic: { label: "史詩", icon: "🟣", name: "深淵釣竿", fishing: [6, 8], weight: 7, imageUrl: "https://lh3.googleusercontent.com/d/1XAz-OdFm-iHU4DBJGqtmaZ8V72laTYOs=w768" },
+  legendary: { label: "傳奇", icon: "🟡", name: "日輪釣竿", fishing: [9, 12], weight: 2, imageUrl: "https://lh3.googleusercontent.com/d/1_LZ4prY7ZSD2CGCLQQFzQQtpaFvrfgNE=w768" }
+};
+
+const SHIP_TYPES = {
+  canoe: {
+    name: "獨木舟",
+    icon: "🛶",
+    cost: 0,
+    safety: 0.62,
+    reward: 1,
+    description: "免費的初始船，靈活但較怕風浪。"
+  },
+  raft: {
+    name: "竹筏",
+    icon: "🪵",
+    cost: 24,
+    safety: 0.76,
+    reward: 1.25,
+    description: "航行較穩定，海上收益略為提升。"
+  },
+  sailboat: {
+    name: "普通帆船",
+    icon: "⛵",
+    cost: 55,
+    safety: 0.9,
+    reward: 1.6,
+    description: "安全且載貨量高，能帶回更多戰利品。"
+  }
+};
+
 const FISH_RARITIES = {
   common: { label: "普通", icon: "⚪" },
   rare: { label: "稀有", icon: "🔵" },
@@ -423,9 +458,26 @@ function ensureDock(player) {
   if (!Number.isInteger(player.dockCapacity) || player.dockCapacity < 1) {
     player.dockCapacity = 3;
   }
+  player.ships = player.ships.map((ship) => {
+    if (typeof ship === "string") {
+      const type = Object.keys(SHIP_TYPES).find((key) => SHIP_TYPES[key].name === ship) ?? "canoe";
+      return { type, name: SHIP_TYPES[type].name };
+    }
+    return ship;
+  });
+  if (!player.ships.some((ship) => ship?.type === "canoe")) {
+    player.ships.unshift({ type: "canoe", name: SHIP_TYPES.canoe.name });
+  }
+  if (!player.activeShip || !player.ships.some((ship) => ship?.type === player.activeShip)) {
+    player.activeShip = player.ships[0]?.type ?? "canoe";
+  }
   player.equipment ??= {};
   player.equipment.armor ??= { name: "新手皮甲", slot: "armor", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 0, defense: 1 };
-  player.equipment.rod ??= { name: "木製釣竿", slot: "rod", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", fishing: 0 };
+  player.equipment.rod ??= { name: "木製釣竿", slot: "rod", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", fishing: 1, imageUrl: ROD_QUALITIES.common.imageUrl };
+  if (!player.equipment.rod.imageUrl) {
+    const rodQuality = ROD_QUALITIES[player.equipment.rod.quality] ?? ROD_QUALITIES.common;
+    player.equipment.rod.imageUrl = rodQuality.imageUrl;
+  }
   if (!Array.isArray(player.equipmentBag)) player.equipmentBag = [];
   return player;
 }
@@ -470,11 +522,12 @@ function createPlayer(id, classKey, buffKey = "attack", mapKey = "dungeon") {
     alive: true,
     relics: [...(base.relics ?? [])],
     items: { potion: 1, bait: 3 },
-    ships: [],
+    ships: [{ type: "canoe", name: SHIP_TYPES.canoe.name }],
+    activeShip: "canoe",
     dockCapacity: 3,
     equipment: {
       armor: { name: "新手皮甲", slot: "armor", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 0, defense: 1 },
-      rod: { name: "木製釣竿", slot: "rod", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", fishing: 0 }
+      rod: { name: "木製釣竿", slot: "rod", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", fishing: 1, imageUrl: ROD_QUALITIES.common.imageUrl }
     },
     equipmentBag: [],
     weapon: { ...(STARTER_WEAPONS[base.starterWeapon] ?? STARTER_WEAPONS.blade) },
@@ -940,7 +993,7 @@ function startCombat(player) {
 function explore(player) {
   if (player?.completed) return { title: "通喜通關", text: "🎉 通喜通關\n這場冒險已經完成。想重玩可以使用 /start。" };
   if (!player?.alive) return { title: "沒有進行中的冒險", text: "先使用 /start 開新局。" };
-  if (player.sceneImageFolder === "fishing") {
+  if (player.sceneImageFolder?.startsWith("fishing")) {
     delete player.sceneImageFile;
     delete player.sceneImageUrl;
     delete player.sceneImageFolder;
@@ -1174,6 +1227,22 @@ function generateWeapon(floor, epicOnly = false) {
 }
 
 function generateGear(floor, forcedSlot = null) {
+  if (forcedSlot === "rod") {
+    const qualityKey = weightedPick(Object.entries(ROD_QUALITIES).map(([key, value]) => ({ key, weight: value.weight }))).key;
+    const quality = ROD_QUALITIES[qualityKey];
+    const [min, max] = quality.fishing;
+    return {
+      name: quality.name,
+      slot: "rod",
+      quality: qualityKey,
+      qualityLabel: quality.label,
+      qualityIcon: quality.icon,
+      attack: 0,
+      defense: 0,
+      fishing: min + roll(max - min + 1) - 1 + Math.floor(floor / 15),
+      imageUrl: quality.imageUrl
+    };
+  }
   const qualityKey = weightedPick(Object.entries(GEAR_QUALITIES).map(([key, value]) => ({ key, weight: value.weight }))).key;
   const quality = GEAR_QUALITIES[qualityKey];
   const slot = forcedSlot ?? pick(["armor", "accessory"]);
@@ -1249,10 +1318,9 @@ function fish(player) {
     const slot = Math.random() < 0.55 ? "rod" : "accessory";
     const gear = generateGear(player.floor, slot);
     if (slot === "rod") {
-      gear.name = pick(["碳纖維釣竿", "霓虹脈衝竿", "深淵獵魚竿"]);
-      gear.attack = 0;
-      gear.defense = 0;
-      gear.fishing = Math.max(2, gear.fishing + 2);
+      delete player.sceneImageFile;
+      delete player.sceneImageFolder;
+      player.sceneImageUrl = gear.imageUrl;
     }
     lines.push(`🎁 額外收穫：${storeOrEquipGear(player, gear)}`);
   }
@@ -1433,10 +1501,88 @@ function dockText(player) {
   const slots = Array.from({ length: player.dockCapacity }, (_, index) => {
     const ship = player.ships[index];
     if (!ship) return `▫️ ${index + 1} 號泊位：空置`;
-    const name = typeof ship === "string" ? ship : ship.name;
-    return `🚢 ${index + 1} 號泊位：${name || "未命名船隻"}`;
+    const type = typeof ship === "string" ? "canoe" : ship.type;
+    const info = SHIP_TYPES[type] ?? SHIP_TYPES.canoe;
+    const active = player.activeShip === type ? "【使用中】" : "";
+    return `${info.icon} ${index + 1} 號泊位：${ship.name || info.name}${active}`;
   });
-  return [`⚓ 船塢容量：${player.ships.length}/${player.dockCapacity}`, ...slots].join("\n");
+  const shipyard = Object.entries(SHIP_TYPES).map(([type, info]) => {
+    const owned = player.ships.some((ship) => ship?.type === type);
+    const state = owned ? (player.activeShip === type ? "使用中" : "已擁有") : `${info.cost} 金幣`;
+    return `${info.icon} ${info.name}｜${state}｜安全 ${Math.round(info.safety * 100)}%｜收益 x${info.reward}`;
+  });
+  return [
+    `⚓ 船塢容量：${player.ships.length}/${player.dockCapacity}`,
+    ...slots,
+    "",
+    "船隻商店",
+    ...shipyard,
+    "",
+    "每一層可以出航一次；選單可購買或切換船隻。"
+  ].join("\n");
+}
+
+function selectOrBuyShip(player, shipType) {
+  if (!player?.alive) return { title: "無法整備船隻", text: "目前沒有進行中的冒險。" };
+  ensureDock(player);
+  const info = SHIP_TYPES[shipType];
+  if (!info) return { title: "未知船隻", text: "找不到這種船。" };
+  const owned = player.ships.some((ship) => ship?.type === shipType);
+  if (owned) {
+    player.activeShip = shipType;
+    setPlayer(player);
+    return { title: "已切換船隻", text: `${info.icon} 本次出航將使用 ${info.name}。` };
+  }
+  if (player.ships.length >= player.dockCapacity) {
+    return { title: "船塢已滿", text: "沒有空泊位可以停放新船。" };
+  }
+  if (player.gold < info.cost) {
+    return { title: "金幣不足", text: `${info.icon} ${info.name} 需要 ${info.cost} 金幣，你目前有 ${player.gold}。` };
+  }
+  player.gold -= info.cost;
+  player.ships.push({ type: shipType, name: info.name });
+  player.activeShip = shipType;
+  setPlayer(player);
+  return { title: "購買船隻成功", text: `${info.icon} 花費 ${info.cost} 金幣購買 ${info.name}，已設為使用中船隻。` };
+}
+
+function voyage(player) {
+  if (!player?.alive) return { title: "無法出航", text: "目前沒有進行中的冒險。" };
+  if (player.combat || player.hiddenRoom) return { title: "無法出航", text: "請先離開目前的危險區域。" };
+  if (player.lastVoyageFloor === player.floor) {
+    return { title: "本層已出航", text: "🌊 每一層只能出航一次，前往下一層後再來。" };
+  }
+  ensureDock(player);
+  const info = SHIP_TYPES[player.activeShip] ?? SHIP_TYPES.canoe;
+  player.lastVoyageFloor = player.floor;
+  const eventRoll = Math.random();
+  const lines = [`${info.icon} 你駕駛 ${info.name} 離開船塢，向未知海域出航。`];
+
+  if (eventRoll > info.safety) {
+    const damage = Math.max(2, Math.round((5 + roll(8) + Math.floor(player.floor / 8)) * (1.15 - info.safety / 2)));
+    player.hp -= damage;
+    lines.push(`🌩️ 突如其來的風暴襲擊船身，你受到 ${damage} 點傷害。`);
+    if (player.hp <= 0) return finishPlayerDeath(player, lines);
+  } else if (eventRoll < 0.18) {
+    const gold = Math.round((8 + roll(10) + Math.floor(player.floor / 3)) * info.reward);
+    player.gold += gold;
+    lines.push(`🏝️ 你發現一座無名小島，帶回 ${gold} 枚金幣。`);
+  } else if (eventRoll < 0.36) {
+    const bait = Math.max(1, Math.round(info.reward));
+    addItem(player, "bait", bait);
+    lines.push(`🐟 你遇見魚群，收集到魚餌 x${bait}。`);
+  } else if (eventRoll < 0.5) {
+    lines.push(`📦 海面漂來一只補給箱。`);
+    lines.push(storeOrEquipGear(player, generateGear(player.floor)));
+  } else {
+    const gold = Math.round((4 + roll(7)) * info.reward);
+    player.gold += gold;
+    heal(player, 3);
+    lines.push(`🌅 航程平穩，你完成海圖委託並獲得 ${gold} 枚金幣，回復 3 HP。`);
+  }
+
+  setPlayer(player);
+  return { title: "出航結果", text: lines.join("\n") };
 }
 
 function statusText(player) {
@@ -1489,6 +1635,7 @@ module.exports = {
   WEAPON_EFFECTS,
   WEAPON_QUALITIES,
   SHOP_ITEMS,
+  SHIP_TYPES,
   healthState,
   buyShopItem,
   combatTurn,
@@ -1507,7 +1654,9 @@ module.exports = {
   loadPlayers,
   rest,
   setPlayer,
+  selectOrBuyShip,
   shopText,
   statusText,
-  useItem
+  useItem,
+  voyage
 };
