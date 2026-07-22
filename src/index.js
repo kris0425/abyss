@@ -25,7 +25,7 @@ const {
   useItem,
   voyage
 } = require("./game");
-const { actionButtons, buffMenu, classMenu, combatButtons, dockButton, equipmentMenu, gameEmbed, gameFiles, hiddenRoomButtons, inventoryMenu, mapMenu, shipMenu, shopMenu, shopQuantityMenu } = require("./components");
+const { actionButtons, buffMenu, classMenu, combatButtons, dockButton, equipmentMenu, gameEmbed, gameFiles, helpMenu, hiddenRoomButtons, inventoryMenu, mapMenu, shipMenu, shopMenu, shopQuantityMenu } = require("./components");
 const { startDashboard } = require("./dashboard");
 
 const token = process.env.DISCORD_TOKEN;
@@ -33,6 +33,73 @@ const dashboardPort = process.env.DASHBOARD_PORT || 3000;
 const gameplayGuideFile = {
   attachment: path.join(__dirname, "..", "assets", "tutorial", "gameplay-guide.png"),
   name: "gameplay-guide.png"
+};
+
+const HELP_TOPICS = {
+  overview: {
+    title: "快速開始",
+    text: [
+      "1. 使用 `/start` 選擇職業、開局祝福與地圖。",
+      "2. 按「探索」推進樓層，遇敵後選擇攻擊、防禦或使用道具。",
+      "3. 善用休息、商店、裝備、釣魚與出航強化角色。",
+      "4. 擊敗第 50 層地城守門人即可通關並登上排行榜。"
+    ].join("\n")
+  },
+  adventure: {
+    title: "探索與地圖",
+    text: [
+      "🚪 每次探索可能遇到敵人、寶箱、神龕、精英怪、Boss 或隱藏房間。",
+      "🏰 地下城是經典冒險；夜城敵人會使用駭入、致盲、暈眩與麻痺。",
+      "🍲 休息固定消耗 3 金幣並回復生命。",
+      "🚩 冒險最高 50 層，死亡後需要使用 `/start` 重新開始。"
+    ].join("\n")
+  },
+  combat: {
+    title: "戰鬥系統",
+    text: [
+      "⚔️ 攻擊：依角色攻擊力與武器造成傷害。",
+      "🛡️ 防禦：降低本回合傷害，並可能完美格擋後反擊。",
+      "🎒 背包：戰鬥中可使用藥水、炸彈或煙霧彈。",
+      "☠️ 中毒、流血與燒傷會持續扣血；暈眩與麻痺會使玩家一回合無法行動。"
+    ].join("\n")
+  },
+  classes: {
+    title: "職業與祝福",
+    text: [
+      "🗡️ 刀客：能力平均，適合第一次遊玩。",
+      "🔮 咒術師：攻擊高，但生命與防禦較低。",
+      "🍀 賭命賊：幸運較高，攻擊可能直接秒殺敵人，也有極低機率被秒殺。",
+      "🏹 遊俠：初始攻擊較高，能閃避並發動強力反擊。",
+      "🎁 開局可選擇攻擊、生命或幸運祝福。"
+    ].join("\n")
+  },
+  equipment: {
+    title: "裝備與商店",
+    text: [
+      "🗡️ 武器品質分為普通、稀有、史詩與傳奇；史詩以上會附加特殊效果。",
+      "🧰 防具、飾品與釣竿可以在裝備庫中切換。",
+      "🛒 商店可購買補血、戰鬥、永久強化道具與遺物。",
+      "📦 擊敗敵人、釣魚與出航都有機會取得裝備。"
+    ].join("\n")
+  },
+  sea: {
+    title: "釣魚與出航",
+    text: [
+      "🎣 每層可釣魚一次，消耗 1 個魚餌；魚的稀有度會影響金幣與增益。",
+      "⚓ 船塢可停放並切換獨木舟、竹筏與普通帆船。",
+      "🌊 每層可出航一次，可能找到島嶼、魚群、補給箱，也可能遇到風暴。",
+      "⛵ 越高級的船越安全，帶回的獎勵也越多。"
+    ].join("\n")
+  },
+  boss: {
+    title: "Boss、事件與通關",
+    text: [
+      "👑 第 8 層首次遇到 Boss，之後每 5 層再次遭遇。",
+      "🚪 第 5 層後可能發現隱藏房間，裡面可能有隱藏 Boss 或即死陷阱。",
+      "🛡️ 第 50 層固定迎戰地城守門人，擊敗後完成冒險。",
+      "🏆 使用 `/leaderboard` 查看最高樓層、擊殺數與通關紀錄。"
+    ].join("\n")
+  }
 };
 
 if (!token) {
@@ -92,6 +159,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith("ship_select:")) {
       await handleShipSelect(interaction);
+      return;
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith("help_select:")) {
+      await handleHelpSelect(interaction);
       return;
     }
 
@@ -171,20 +243,10 @@ async function handleCommand(interaction) {
   }
 
   if (interaction.commandName === "help") {
+    const topic = HELP_TOPICS.overview;
     await interaction.reply({
-      embeds: [
-        gameEmbed(
-          "玩法",
-          [
-            "使用 `/start` 選職業開局，冒險面板會公開在頻道。",
-            "開局可選攻擊、血量或幸運祝福，並會獲得職業初始武器。",
-            "探索時會遇敵、寶箱、神龕或 Boss。遇敵時可攻擊、防禦或使用道具。",
-            "擊敗敵人有機率掉落普通、稀有、史詩、傳奇武器。史詩以上有附加效果。",
-            "每 5 層會遇到 Boss，擊敗 hAO 可獲得女僕照遺物。",
-            "休息固定消耗 3 金幣。"
-          ].join("\n")
-        )
-      ],
+      embeds: [gameEmbed(topic.title, topic.text, null)],
+      components: [helpMenu(interaction.user.id, "overview")],
       ephemeral: true
     });
     return;
@@ -425,6 +487,20 @@ async function handleShopSelect(interaction) {
     content: `${item.icon} ${item.label}｜單價 ${item.cost} 金幣｜請選擇數量。`,
     embeds: [],
     components: [shopQuantityMenu(itemId, interaction.user.id)]
+  });
+}
+
+async function handleHelpSelect(interaction) {
+  const [, ownerId = "global"] = interaction.customId.split(":");
+  if (ownerId !== "global" && ownerId !== interaction.user.id) {
+    await interaction.reply({ content: "這不是你的玩法選單。", ephemeral: true });
+    return;
+  }
+  const topicId = interaction.values[0];
+  const topic = HELP_TOPICS[topicId] ?? HELP_TOPICS.overview;
+  await interaction.update({
+    embeds: [gameEmbed(topic.title, topic.text, null)],
+    components: [helpMenu(interaction.user.id, topicId)]
   });
 }
 

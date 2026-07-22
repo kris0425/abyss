@@ -210,6 +210,26 @@ function equipmentMenu(player, ownerId = "global") {
   return new ActionRowBuilder().addComponents(menu);
 }
 
+function helpMenu(ownerId = "global", selected = "overview") {
+  const topics = [
+    { label: "快速開始", value: "overview", emoji: "📖", description: "開始冒險與基本操作" },
+    { label: "探索與地圖", value: "adventure", emoji: "🚪", description: "樓層、事件、休息與地圖差異" },
+    { label: "戰鬥系統", value: "combat", emoji: "⚔️", description: "攻擊、防禦、道具與負面狀態" },
+    { label: "職業與祝福", value: "classes", emoji: "🧑‍🚀", description: "職業特色與開局增益" },
+    { label: "裝備與商店", value: "equipment", emoji: "🧰", description: "武器、裝備、道具與品質" },
+    { label: "釣魚與出航", value: "sea", emoji: "⛵", description: "釣魚、船塢與海上探險" },
+    { label: "Boss 與通關", value: "boss", emoji: "👑", description: "Boss、隱藏房間與排行榜" }
+  ];
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`help_select:${ownerId}`)
+    .setPlaceholder("選擇想查看的玩法")
+    .addOptions(topics.map((topic) => ({
+      ...topic,
+      default: topic.value === selected
+    })));
+  return new ActionRowBuilder().addComponents(menu);
+}
+
 function combatButtons(disabled = false, ownerId = "global") {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -343,6 +363,7 @@ module.exports = {
   equipmentMenu,
   gameEmbed,
   gameFiles,
+  helpMenu,
   hiddenRoomButtons,
   inventoryMenu,
   mapMenu,
