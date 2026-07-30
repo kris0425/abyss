@@ -22,6 +22,9 @@ const commands = [
     .setName("leaderboard")
     .setDescription("查看地城冒險排行榜"),
   new SlashCommandBuilder()
+    .setName("worldboss")
+    .setDescription("查看雷暴骨龍世界 Boss 活動"),
+  new SlashCommandBuilder()
     .setName("dashboard")
     .setDescription("取得本機圖形化介面網址"),
   new SlashCommandBuilder()

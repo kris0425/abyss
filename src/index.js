@@ -27,6 +27,7 @@ const {
 } = require("./game");
 const { actionButtons, buffMenu, classMenu, combatButtons, dockButton, equipmentMenu, gameEmbed, gameFiles, helpMenu, hiddenRoomButtons, inventoryMenu, mapMenu, shipMenu, shopMenu, shopQuantityMenu } = require("./components");
 const { startDashboard } = require("./dashboard");
+const { handleWorldBossButton, showWorldBoss, startWorldBossSystem } = require("./world-boss");
 
 const token = process.env.DISCORD_TOKEN;
 const dashboardPort = process.env.DASHBOARD_PORT || 3000;
@@ -97,6 +98,7 @@ const HELP_TOPICS = {
       "👑 第 8 層首次遇到 Boss，之後每 5 層再次遭遇。",
       "🚪 第 5 層後可能發現隱藏房間，裡面可能有隱藏 Boss 或即死陷阱。",
       "🛡️ 第 50 層固定迎戰地城守門人，擊敗後完成冒險。",
+      "🐉 雷暴骨龍每天 11:00、19:00 現身，可組隊討伐或獨自挑戰。",
       "🏆 使用 `/leaderboard` 查看最高樓層、擊殺數與通關紀錄。"
     ].join("\n")
   }
@@ -113,6 +115,7 @@ const client = new Client({
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
   startDashboard(readyClient);
+  startWorldBossSystem(readyClient, { getPlayer, setPlayer });
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -164,6 +167,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith("help_select:")) {
       await handleHelpSelect(interaction);
+      return;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith("wb:")) {
+      await handleWorldBossButton(interaction);
       return;
     }
 
@@ -224,6 +232,11 @@ async function handleCommand(interaction) {
     await interaction.reply({
       embeds: [gameEmbed("排行榜", leaderboardText(), null)]
     });
+    return;
+  }
+
+  if (interaction.commandName === "worldboss") {
+    await showWorldBoss(interaction);
     return;
   }
 
