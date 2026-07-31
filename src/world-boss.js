@@ -11,13 +11,16 @@ const {
 const STATE_PATH = path.join(__dirname, "..", "data", "world-boss.json");
 const IMAGE_PATH = path.join(__dirname, "..", "assets", "world-boss", "thunder-bone-dragon.jpeg");
 const INTRO_PATH = path.join(__dirname, "..", "assets", "world-boss", "thunder-bone-dragon-intro.mp4");
+const IDLE_PATH = path.join(__dirname, "..", "assets", "world-boss", "thunder-bone-dragon-idle.mp4");
 const IMAGE_NAME = "thunder-bone-dragon.jpeg";
 const INTRO_NAME = "thunder-bone-dragon-intro.mp4";
+const IDLE_NAME = "thunder-bone-dragon-idle.mp4";
 const TIME_ZONE = "Asia/Taipei";
 const SPAWN_HOURS = [11, 19];
 const DEFAULT_ANNOUNCEMENT_CHANNEL_ID = "978165305589239870";
 const EVENT_DURATION_MS = 60 * 60 * 1000;
 const ANNOUNCEMENT_RETRY_MS = 60 * 1000;
+const INTRO_DURATION_MS = 12 * 1000;
 const TEAM_BASE_HP = 800;
 const TEAM_MEMBER_HP = 180;
 const SOLO_BOSS_HP = 360;
@@ -194,7 +197,14 @@ function teamStatusText() {
   ].join("\n");
 }
 
-function announcementPayload(includeIntro = false) {
+function bossFiles({ includeIntro = false, includeIdle = false } = {}) {
+  const files = [{ attachment: IMAGE_PATH, name: IMAGE_NAME }];
+  if (includeIdle) files.unshift({ attachment: IDLE_PATH, name: IDLE_NAME });
+  if (includeIntro) files.unshift({ attachment: INTRO_PATH, name: INTRO_NAME });
+  return files;
+}
+
+function announcementPayload({ includeIntro = false, includeIdle = false } = {}) {
   const active = eventIsActive();
   const description = active
     ? [
@@ -206,14 +216,26 @@ function announcementPayload(includeIntro = false) {
         `活動結束：<t:${Math.floor(state.activeUntil / 1000)}:R>`
       ].join("\n")
     : "本次世界 Boss 活動已經結束。下一次將在每日 11:00 或 19:00 現身。";
-  const files = [{ attachment: IMAGE_PATH, name: IMAGE_NAME }];
-  if (includeIntro) files.unshift({ attachment: INTRO_PATH, name: INTRO_NAME });
   return {
     content: includeIntro ? "⚡ **世界 Boss「雷暴骨龍」現身！**" : undefined,
     embeds: [bossEmbed(active ? "雷暴骨龍現身" : "世界 Boss 已離去", description, active ? 0x7c3aed : 0x475569)],
     components: [eventButtons(!active || state.team?.defeated)],
-    files
+    files: bossFiles({ includeIntro, includeIdle })
   };
+}
+
+function scheduleIdleVideo(client, channelId, messageId) {
+  const timer = setTimeout(async () => {
+    if (!eventIsActive()) return;
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    const message = await channel?.messages?.fetch(messageId).catch(() => null);
+    if (!message) return;
+    const payload = announcementPayload({ includeIdle: true });
+    await message.edit({ ...payload, attachments: [] }).catch((error) => {
+      console.error("World boss idle video update failed; keeping the intro attachment.", error);
+    });
+  }, INTRO_DURATION_MS);
+  timer.unref?.();
 }
 
 async function chooseAnnouncementChannel(client) {
@@ -258,16 +280,17 @@ async function announceEvent(client) {
     return false;
   }
   try {
-    const message = await channel.send(announcementPayload(true));
+    const message = await channel.send(announcementPayload({ includeIntro: true }));
     state.channelId = channel.id;
     state.messageId = message.id;
     saveState();
+    scheduleIdleVideo(client, channel.id, message.id);
     console.log(`World boss announced in #${channel.name ?? channel.id} (${channel.id}).`);
     return true;
   } catch (error) {
-    console.error("World boss intro upload failed, retrying without video.", error);
+    console.error("World boss intro upload failed, retrying with the idle video.", error);
     try {
-      const fallback = announcementPayload(false);
+      const fallback = announcementPayload({ includeIdle: true });
       const message = await channel.send(fallback);
       state.channelId = channel.id;
       state.messageId = message.id;
@@ -287,7 +310,7 @@ async function refreshAnnouncement(client) {
   if (!channel?.messages) return;
   const message = await channel.messages.fetch(state.messageId).catch(() => null);
   if (!message) return;
-  const payload = announcementPayload(false);
+  const payload = announcementPayload({ includeIdle: true });
   delete payload.files;
   await message.edit(payload).catch((error) => console.error("World boss message update failed.", error));
 }
@@ -454,7 +477,7 @@ async function showWorldBoss(interaction) {
     return;
   }
   await interaction.reply({
-    ...announcementPayload(false),
+    ...announcementPayload({ includeIdle: true }),
     content: undefined,
     ephemeral: true
   });
@@ -464,7 +487,7 @@ async function replyWithBoss(interaction, title, text, components, color = 0x7c3
   await interaction.editReply({
     embeds: [bossEmbed(title, text, color)],
     components,
-    files: [{ attachment: IMAGE_PATH, name: IMAGE_NAME }]
+    files: bossFiles({ includeIdle: true })
   });
 }
 
