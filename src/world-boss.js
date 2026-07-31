@@ -4,7 +4,8 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder
+  EmbedBuilder,
+  PermissionFlagsBits
 } = require("discord.js");
 
 const STATE_PATH = path.join(__dirname, "..", "data", "world-boss.json");
@@ -14,13 +15,16 @@ const IMAGE_NAME = "thunder-bone-dragon.jpeg";
 const INTRO_NAME = "thunder-bone-dragon-intro.mp4";
 const TIME_ZONE = "Asia/Taipei";
 const SPAWN_HOURS = [11, 19];
+const DEFAULT_ANNOUNCEMENT_CHANNEL_ID = "978165305589239870";
 const EVENT_DURATION_MS = 60 * 60 * 1000;
+const ANNOUNCEMENT_RETRY_MS = 60 * 1000;
 const TEAM_BASE_HP = 800;
 const TEAM_MEMBER_HP = 180;
 const SOLO_BOSS_HP = 360;
 
 let state = loadState();
 let runtime = null;
+let lastAnnouncementAttemptAt = 0;
 
 function defaultState() {
   return {
@@ -213,16 +217,35 @@ function announcementPayload(includeIntro = false) {
 }
 
 async function chooseAnnouncementChannel(client) {
-  const configuredId = process.env.WORLD_BOSS_CHANNEL_ID || state.channelId;
-  if (configuredId) {
-    const configured = await client.channels.fetch(configuredId).catch(() => null);
-    if (configured?.isTextBased() && typeof configured.send === "function") return configured;
+  const requiredPermissions = [
+    PermissionFlagsBits.ViewChannel,
+    PermissionFlagsBits.SendMessages,
+    PermissionFlagsBits.EmbedLinks,
+    PermissionFlagsBits.AttachFiles
+  ];
+  const canAnnounce = (channel) => {
+    if (!channel?.isTextBased?.() || typeof channel.send !== "function") return false;
+    const permissions = channel.permissionsFor?.(client.user);
+    return !permissions || permissions.has(requiredPermissions);
+  };
+  const preferredIds = [
+    process.env.WORLD_BOSS_CHANNEL_ID,
+    DEFAULT_ANNOUNCEMENT_CHANNEL_ID,
+    state.channelId
+  ].filter(Boolean);
+
+  for (const channelId of [...new Set(preferredIds)]) {
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (canAnnounce(channel)) return channel;
   }
+
   for (const guild of client.guilds.cache.values()) {
-    if (guild.systemChannel?.isTextBased()) return guild.systemChannel;
-    const fallback = guild.channels.cache.find((channel) =>
-      channel?.isTextBased?.() && typeof channel.send === "function"
+    const lobby = guild.channels.cache.find((channel) =>
+      channel?.name?.includes("自由大廳") && canAnnounce(channel)
     );
+    if (lobby) return lobby;
+    if (canAnnounce(guild.systemChannel)) return guild.systemChannel;
+    const fallback = guild.channels.cache.find(canAnnounce);
     if (fallback) return fallback;
   }
   return null;
@@ -232,20 +255,29 @@ async function announceEvent(client) {
   const channel = await chooseAnnouncementChannel(client);
   if (!channel) {
     console.warn("World boss spawned, but no announcement channel was available.");
-    return;
+    return false;
   }
   try {
     const message = await channel.send(announcementPayload(true));
     state.channelId = channel.id;
     state.messageId = message.id;
     saveState();
+    console.log(`World boss announced in #${channel.name ?? channel.id} (${channel.id}).`);
+    return true;
   } catch (error) {
     console.error("World boss intro upload failed, retrying without video.", error);
-    const fallback = announcementPayload(false);
-    const message = await channel.send(fallback);
-    state.channelId = channel.id;
-    state.messageId = message.id;
-    saveState();
+    try {
+      const fallback = announcementPayload(false);
+      const message = await channel.send(fallback);
+      state.channelId = channel.id;
+      state.messageId = message.id;
+      saveState();
+      console.log(`World boss announced without video in #${channel.name ?? channel.id} (${channel.id}).`);
+      return true;
+    } catch (fallbackError) {
+      console.error(`World boss announcement failed in channel ${channel.id}; it will retry.`, fallbackError);
+      return false;
+    }
   }
 }
 
@@ -509,11 +541,19 @@ async function handleWorldBossButton(interaction) {
 
 async function schedulerTick() {
   const slot = currentSpawnSlot();
-  if (!slot || slot.key === state.lastSpawnKey) {
+  if (!slot) {
     eventIsActive();
     return;
   }
-  createEvent(slot, state.channelId);
+
+  if (slot.key !== state.lastSpawnKey) {
+    createEvent(slot, process.env.WORLD_BOSS_CHANNEL_ID || DEFAULT_ANNOUNCEMENT_CHANNEL_ID);
+  }
+  if (!eventIsActive() || state.messageId) return;
+
+  const now = Date.now();
+  if (now - lastAnnouncementAttemptAt < ANNOUNCEMENT_RETRY_MS) return;
+  lastAnnouncementAttemptAt = now;
   await announceEvent(runtime.client);
 }
 
