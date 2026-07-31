@@ -170,14 +170,15 @@ function soloButtons(disabled = false) {
   );
 }
 
-function bossEmbed(title, description, color = 0x7c3aed) {
-  return new EmbedBuilder()
+function bossEmbed(title, description, color = 0x7c3aed, includeImage = true) {
+  const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(`🐉 ${title}`)
     .setDescription(description)
-    .setImage(`attachment://${IMAGE_NAME}`)
     .setFooter({ text: "世界 Boss｜每天 11:00、19:00（UTC+8）現身" })
     .setTimestamp();
+  if (includeImage) embed.setImage(`attachment://${IMAGE_NAME}`);
+  return embed;
 }
 
 function teamStatusText() {
@@ -198,9 +199,10 @@ function teamStatusText() {
 }
 
 function bossFiles({ includeIntro = false, includeIdle = false } = {}) {
-  const files = [{ attachment: IMAGE_PATH, name: IMAGE_NAME }];
+  const files = [];
   if (includeIdle) files.unshift({ attachment: IDLE_PATH, name: IDLE_NAME });
   if (includeIntro) files.unshift({ attachment: INTRO_PATH, name: INTRO_NAME });
+  if (!includeIntro && !includeIdle) files.push({ attachment: IMAGE_PATH, name: IMAGE_NAME });
   return files;
 }
 
@@ -218,7 +220,12 @@ function announcementPayload({ includeIntro = false, includeIdle = false } = {})
     : "本次世界 Boss 活動已經結束。下一次將在每日 11:00 或 19:00 現身。";
   return {
     content: includeIntro ? "⚡ **世界 Boss「雷暴骨龍」現身！**" : undefined,
-    embeds: [bossEmbed(active ? "雷暴骨龍現身" : "世界 Boss 已離去", description, active ? 0x7c3aed : 0x475569)],
+    embeds: [bossEmbed(
+      active ? "雷暴骨龍現身" : "世界 Boss 已離去",
+      description,
+      active ? 0x7c3aed : 0x475569,
+      !includeIntro && !includeIdle
+    )],
     components: [eventButtons(!active || state.team?.defeated)],
     files: bossFiles({ includeIntro, includeIdle })
   };
@@ -470,8 +477,8 @@ async function showWorldBoss(interaction) {
   saveState();
   if (!eventIsActive()) {
     await interaction.reply({
-      embeds: [bossEmbed("世界 Boss 預告", unavailableText(), 0x475569)],
-      files: [{ attachment: IMAGE_PATH, name: IMAGE_NAME }],
+      embeds: [bossEmbed("世界 Boss 預告", unavailableText(), 0x475569, false)],
+      files: bossFiles({ includeIdle: true }),
       ephemeral: true
     });
     return;
@@ -485,7 +492,7 @@ async function showWorldBoss(interaction) {
 
 async function replyWithBoss(interaction, title, text, components, color = 0x7c3aed) {
   await interaction.editReply({
-    embeds: [bossEmbed(title, text, color)],
+    embeds: [bossEmbed(title, text, color, false)],
     components,
     files: bossFiles({ includeIdle: true })
   });
