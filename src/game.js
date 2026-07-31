@@ -59,11 +59,23 @@ const CLASS_EMOJI = {
   ranger: "🏹"
 };
 
+const WEAPON_IMAGE_FILES = {
+  "新手長劍": "starter-longsword.png",
+  "新手法杖": "starter-staff.png",
+  "新手短刀": "starter-dagger.png",
+  "遊俠短弓": "ranger-shortbow.png",
+  "加班終結者": "overtime-ender.png",
+  "會議破壞刃": "meeting-breaker.png",
+  "薪水追回斧": "salary-recovery-axe.png",
+  "客訴切割器": "complaint-cutter.png",
+  "hAO 震撼槌": "hao-shock-hammer.png"
+};
+
 const STARTER_WEAPONS = {
-  blade: { name: "新手長劍", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 3, effects: [] },
-  spark: { name: "新手法杖", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 4, effects: [] },
-  rat: { name: "新手短刀", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 2, effects: [] },
-  ranger: { name: "遊俠短弓", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 3, effects: [] }
+  blade: { name: "新手長劍", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 3, effects: [], imageFile: WEAPON_IMAGE_FILES["新手長劍"] },
+  spark: { name: "新手法杖", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 4, effects: [], imageFile: WEAPON_IMAGE_FILES["新手法杖"] },
+  rat: { name: "新手短刀", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 2, effects: [], imageFile: WEAPON_IMAGE_FILES["新手短刀"] },
+  ranger: { name: "遊俠短弓", quality: "common", qualityLabel: "普通", qualityIcon: "⚪", attack: 3, effects: [], imageFile: WEAPON_IMAGE_FILES["遊俠短弓"] }
 };
 
 const START_BUFFS = {
@@ -479,6 +491,9 @@ function ensureDock(player) {
     player.equipment.rod.imageUrl = rodQuality.imageUrl;
   }
   if (!Array.isArray(player.equipmentBag)) player.equipmentBag = [];
+  if (player.weapon && !player.weapon.imageFile) {
+    player.weapon.imageFile = WEAPON_IMAGE_FILES[player.weapon.name] ?? null;
+  }
   return player;
 }
 
@@ -1216,13 +1231,15 @@ function generateWeapon(floor, epicOnly = false) {
   const quality = WEAPON_QUALITIES[qualityKey];
   const [min, max] = quality.bonus;
   const names = ["加班終結者", "會議破壞刃", "薪水追回斧", "客訴切割器", "hAO 震撼槌"];
+  const name = pick(names);
   return {
-    name: pick(names),
+    name,
     quality: qualityKey,
     qualityLabel: quality.label,
     qualityIcon: quality.icon,
     attack: min + roll(max - min + 1) + Math.floor(floor / 3),
-    effects: pickEffects(quality.effectCount)
+    effects: pickEffects(quality.effectCount),
+    imageFile: WEAPON_IMAGE_FILES[name]
   };
 }
 

@@ -21,7 +21,10 @@ function gameEmbed(title, text, player) {
     addStackedText(embed, "目前狀態", statusText(player), 900);
   }
 
-  const imageUrl = player?.combat?.imageUrl ?? player?.sceneImageUrl;
+  const weaponImageUrl = player?.weapon?.imageFile
+    ? `attachment://${player.weapon.imageFile}`
+    : null;
+  const imageUrl = player?.combat?.imageUrl ?? player?.sceneImageUrl ?? weaponImageUrl;
   if (imageUrl) {
     embed.setImage(imageUrl);
   }
@@ -343,9 +346,15 @@ function embedColor(player) {
 
 function gameFiles(player) {
   const combatImage = player?.combat?.imageFile;
-  const imageFile = combatImage ?? player?.sceneImageFile;
+  const sceneImage = player?.sceneImageFile;
+  const weaponImage = player?.weapon?.imageFile;
+  const imageFile = combatImage ?? sceneImage ?? weaponImage;
   if (!imageFile) return [];
-  const folder = combatImage ? "enemies" : (player?.sceneImageFolder ?? "enemies");
+  const folder = combatImage
+    ? "enemies"
+    : sceneImage
+      ? (player?.sceneImageFolder ?? "enemies")
+      : "weapons";
   return [
     {
       attachment: path.join(__dirname, "..", "assets", folder, imageFile),
