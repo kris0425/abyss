@@ -11,10 +11,10 @@ const {
 const STATE_PATH = path.join(__dirname, "..", "data", "world-boss.json");
 const IMAGE_PATH = path.join(__dirname, "..", "assets", "world-boss", "thunder-bone-dragon.jpeg");
 const INTRO_PATH = path.join(__dirname, "..", "assets", "world-boss", "thunder-bone-dragon-intro.mp4");
-const IDLE_PATH = path.join(__dirname, "..", "assets", "world-boss", "thunder-bone-dragon-idle.mp4");
+const IDLE_PATH = path.join(__dirname, "..", "assets", "world-boss", "thunder-bone-dragon-idle.gif");
 const IMAGE_NAME = "thunder-bone-dragon.jpeg";
 const INTRO_NAME = "thunder-bone-dragon-intro.mp4";
-const IDLE_NAME = "thunder-bone-dragon-idle.mp4";
+const IDLE_NAME = "thunder-bone-dragon-idle.gif";
 const TIME_ZONE = "Asia/Taipei";
 const SPAWN_HOURS = [11, 19];
 const DEFAULT_ANNOUNCEMENT_CHANNEL_ID = "978165305589239870";
