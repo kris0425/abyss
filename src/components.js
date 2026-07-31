@@ -28,8 +28,20 @@ function gameEmbed(title, text, player) {
   if (imageUrl) {
     embed.setImage(imageUrl);
   }
+  if (shouldShowClassPortrait(player)) {
+    embed.setThumbnail(`attachment://${player.classImageFile}`);
+  }
 
   return embed;
+}
+
+function shouldShowClassPortrait(player) {
+  return Boolean(
+    player?.classImageFile
+    && !player?.combat
+    && !player?.sceneImageFile
+    && !player?.sceneImageUrl
+  );
 }
 
 function addStackedText(embed, baseName, text, limit = 900) {
@@ -349,18 +361,25 @@ function gameFiles(player) {
   const sceneImage = player?.sceneImageFile;
   const weaponImage = player?.weapon?.imageFile;
   const imageFile = combatImage ?? sceneImage ?? weaponImage;
-  if (!imageFile) return [];
-  const folder = combatImage
-    ? "enemies"
-    : sceneImage
-      ? (player?.sceneImageFolder ?? "enemies")
-      : "weapons";
-  return [
-    {
+  const files = [];
+  if (imageFile) {
+    const folder = combatImage
+      ? "enemies"
+      : sceneImage
+        ? (player?.sceneImageFolder ?? "enemies")
+        : "weapons";
+    files.push({
       attachment: path.join(__dirname, "..", "assets", folder, imageFile),
       name: imageFile
-    }
-  ];
+    });
+  }
+  if (shouldShowClassPortrait(player) && player.classImageFile !== imageFile) {
+    files.push({
+      attachment: path.join(__dirname, "..", "assets", "players", player.classImageFile),
+      name: player.classImageFile
+    });
+  }
+  return files;
 }
 
 module.exports = {

@@ -609,7 +609,7 @@ async function updateGamePanel(interaction, result, player) {
 }
 
 function currentImageFile(player) {
-  return gameFiles(player)[0]?.name ?? null;
+  return gameFiles(player).map((file) => file.name).join("|") || null;
 }
 
 function equipmentPreview(player) {

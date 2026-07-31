@@ -4,6 +4,13 @@ const path = require("node:path");
 const SAVE_PATH = path.join(__dirname, "..", "data", "players.json");
 const LEADERBOARD_PATH = path.join(__dirname, "..", "data", "leaderboard.json");
 
+const CLASS_IMAGE_FILES = {
+  blade: "player-blade.gif",
+  spark: "player-spark.gif",
+  rat: "player-rat.gif",
+  ranger: "player-ranger.gif"
+};
+
 const CLASSES = {
   blade: {
     label: "刀客",
@@ -14,6 +21,7 @@ const CLASSES = {
     gold: 0,
     relics: [],
     description: "穩定輸出，適合第一局。",
+    imageFile: CLASS_IMAGE_FILES.blade,
     starterWeapon: "blade"
   },
   spark: {
@@ -25,6 +33,7 @@ const CLASSES = {
     gold: 0,
     relics: [],
     description: "傷害高，但被打很痛。",
+    imageFile: CLASS_IMAGE_FILES.spark,
     starterWeapon: "spark"
   },
   rat: {
@@ -37,6 +46,7 @@ const CLASSES = {
     luck: 5,
     relics: [],
     description: "初始幸運5%；攻擊可秒殺，敵人也有1%秒殺你。",
+    imageFile: CLASS_IMAGE_FILES.rat,
     starterWeapon: "rat"
   },
   ranger: {
@@ -48,6 +58,7 @@ const CLASSES = {
     gold: 0,
     relics: [],
     description: "初始武器攻擊+3；25%閃避敵人傷害並發動強力反擊。",
+    imageFile: CLASS_IMAGE_FILES.ranger,
     starterWeapon: "ranger"
   }
 };
@@ -498,6 +509,9 @@ function ensureDock(player) {
   if (player.weapon && !player.weapon.imageFile) {
     player.weapon.imageFile = WEAPON_IMAGE_FILES[player.weapon.name] ?? null;
   }
+  if (!player.classImageFile) {
+    player.classImageFile = CLASS_IMAGE_FILES[player.classKey] ?? CLASS_IMAGE_FILES.blade;
+  }
   return player;
 }
 
@@ -530,6 +544,7 @@ function createPlayer(id, classKey, buffKey = "attack", mapKey = "dungeon") {
     id,
     classKey,
     classLabel: base.label,
+    classImageFile: base.imageFile ?? CLASS_IMAGE_FILES.blade,
     hp: base.hp,
     maxHp: base.maxHp,
     atk: base.atk,
