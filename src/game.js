@@ -434,6 +434,7 @@ function recordLeaderboard(player, outcome = "冒險結束") {
   if (previous && previous.score > score) return;
   leaderboard[player.id] = {
     id: player.id,
+    name: player.webName ?? previous?.name ?? null,
     score,
     floor: player.floor ?? 0,
     kills: player.kills ?? 0,
@@ -453,7 +454,8 @@ function leaderboardText(limit = 10) {
   return rows.map((row, index) => {
     const medal = ["🥇", "🥈", "🥉"][index] ?? `${index + 1}.`;
     const state = row.completed ? "🏁 通關" : "💀 倒下";
-    return `${medal} <@${row.id}>｜${state}｜${row.floor} 層｜擊殺 ${row.kills}｜金幣 ${row.gold}`;
+    const playerName = row.id.startsWith("web:") ? `網頁｜${row.name ?? "無名冒險者"}` : `<@${row.id}>`;
+    return `${medal} ${playerName}｜${state}｜${row.floor} 層｜擊殺 ${row.kills}｜金幣 ${row.gold}`;
   }).join("\n");
 }
 

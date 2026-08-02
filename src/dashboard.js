@@ -1,67 +1,273 @@
+const crypto = require("node:crypto");
+const fs = require("node:fs");
 const http = require("node:http");
-const { loadPlayers, RELICS } = require("./game");
+const path = require("node:path");
+const {
+  CLASSES,
+  CLASS_EMOJI,
+  ITEM_DEFS,
+  MAPS,
+  RELICS,
+  SHIP_TYPES,
+  SHOP_ITEMS,
+  START_BUFFS,
+  buyShopItem,
+  combatTurn,
+  createPlayer,
+  enterHiddenRoom,
+  equipStoredGear,
+  explore,
+  fish,
+  getPlayer,
+  leaveHiddenRoom,
+  rest,
+  selectOrBuyShip,
+  setPlayer,
+  useItem,
+  voyage
+} = require("./game");
 
 const DEFAULT_PORT = 3000;
+const WEB_ROOT = path.join(__dirname, "..", "web");
+const ASSET_ROOT = path.join(__dirname, "..", "assets");
+const COOKIE_NAME = "abyss_web_session";
+const MIME_TYPES = {
+  ".css": "text/css; charset=utf-8",
+  ".gif": "image/gif",
+  ".html": "text/html; charset=utf-8",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".js": "text/javascript; charset=utf-8",
+  ".mp4": "video/mp4",
+  ".png": "image/png"
+};
 
 function startDashboard(client) {
   const port = Number(process.env.DASHBOARD_PORT || DEFAULT_PORT);
-
-  const server = http.createServer(async (req, res) => {
-    if (req.url === "/api/players") {
-      sendJson(res, await playersPayload(client));
-      return;
-    }
-
-    if (req.url === "/" || req.url === "/index.html") {
-      sendHtml(res, pageHtml(port));
-      return;
-    }
-
-    sendNotFound(res);
-  });
+  const server = http.createServer((req, res) => route(req, res, client));
 
   server.listen(port, () => {
-    console.log(`Dashboard ready: http://localhost:${port}`);
+    console.log(`Web game ready: http://localhost:${port}`);
   });
 
   server.on("error", (error) => {
-    console.error(`Dashboard failed to start on port ${port}:`, error.message);
+    console.error(`Web game failed to start on port ${port}:`, error.message);
   });
 
   return server;
 }
 
-async function playersPayload(client) {
-  const players = Object.values(loadPlayers());
-  const rows = await Promise.all(
-    players.map(async (player) => ({
-      ...player,
-      displayName: await resolveName(client, player.userId),
-      relicNames: player.relics.map((id) => RELICS[id]?.name ?? id)
-    }))
-  );
-
-  rows.sort((a, b) => {
-    if (Number(b.alive) !== Number(a.alive)) return Number(b.alive) - Number(a.alive);
-    if (b.floor !== a.floor) return b.floor - a.floor;
-    return b.kills - a.kills;
-  });
-
-  return {
-    updatedAt: new Date().toISOString(),
-    players: rows,
-    totals: {
-      players: rows.length,
-      alive: rows.filter((player) => player.alive).length,
-      fallen: rows.filter((player) => !player.alive).length
+async function route(req, res, client) {
+  try {
+    const url = new URL(req.url, "http://localhost");
+    if (req.method === "GET" && url.pathname === "/api/players") {
+      sendJson(res, await playersPayload(client));
+      return;
     }
+    if (req.method === "GET" && url.pathname === "/api/web/config") {
+      webPlayerId(req, res);
+      sendJson(res, webConfig());
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/web/state") {
+      const id = webPlayerId(req, res);
+      sendJson(res, { player: serializePlayer(getPlayer(id)) });
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/web/start") {
+      await startWebRun(req, res);
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/web/action") {
+      await performWebAction(req, res);
+      return;
+    }
+    if (req.method === "GET" && url.pathname.startsWith("/assets/")) {
+      sendStatic(res, ASSET_ROOT, url.pathname.slice("/assets/".length), true);
+      return;
+    }
+    if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+      sendStatic(res, WEB_ROOT, "index.html");
+      return;
+    }
+    if (req.method === "GET" && (url.pathname === "/app.js" || url.pathname === "/styles.css")) {
+      sendStatic(res, WEB_ROOT, url.pathname.slice(1));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/favicon.ico") {
+      res.writeHead(204, { "cache-control": "public, max-age=86400" });
+      res.end();
+      return;
+    }
+    sendError(res, 404, "找不到這個頁面。");
+  } catch (error) {
+    console.error("Web game request failed:", error);
+    if (!res.headersSent) sendError(res, 500, "伺服器暫時無法處理這個操作。");
+  }
+}
+
+async function startWebRun(req, res) {
+  const id = webPlayerId(req, res);
+  const body = await readJson(req);
+  const classKey = CLASSES[body.classKey] ? body.classKey : "blade";
+  const buffKey = START_BUFFS[body.buffKey] ? body.buffKey : "attack";
+  const mapKey = MAPS[body.mapKey] ? body.mapKey : "dungeon";
+  const player = createPlayer(id, classKey, buffKey, mapKey);
+  player.webName = cleanName(body.name);
+  setPlayer(player);
+  sendJson(res, {
+    event: { title: "遠征開始", text: `${player.webName} 進入了${player.mapLabel}。` },
+    player: serializePlayer(player)
+  });
+}
+
+async function performWebAction(req, res) {
+  const id = webPlayerId(req, res);
+  const player = getPlayer(id);
+  if (!player) {
+    sendError(res, 409, "請先建立角色。");
+    return;
+  }
+
+  const body = await readJson(req);
+  const payload = body.payload ?? {};
+  let event;
+  switch (body.action) {
+    case "explore": event = explore(player); break;
+    case "attack": event = combatTurn(player, "attack"); break;
+    case "defend": event = combatTurn(player, "defend"); break;
+    case "rest": event = rest(player); break;
+    case "fish": event = fish(player); break;
+    case "voyage": event = voyage(player); break;
+    case "use_item": event = useItem(player, String(payload.itemId ?? "")); break;
+    case "buy_item": event = buyShopItem(player, String(payload.itemId ?? ""), payload.quantity); break;
+    case "enter_hidden": event = enterHiddenRoom(player); break;
+    case "leave_hidden": event = leaveHiddenRoom(player); break;
+    case "ship": event = selectOrBuyShip(player, String(payload.shipType ?? "")); break;
+    case "equip_gear": event = equipStoredGear(player, Number.parseInt(payload.index, 10)); break;
+    default:
+      sendError(res, 400, "未知的遊戲操作。");
+      return;
+  }
+
+  sendJson(res, { event, player: serializePlayer(getPlayer(id)) });
+}
+
+function webConfig() {
+  return {
+    classes: Object.entries(CLASSES).map(([id, value]) => ({
+      id,
+      label: value.label,
+      icon: CLASS_EMOJI[id] ?? "🎲",
+      description: value.description,
+      hp: value.hp,
+      attack: value.atk,
+      defense: value.def,
+      image: `/assets/players/${value.imageFile}`
+    })),
+    buffs: Object.entries(START_BUFFS).map(([id, value]) => ({
+      id,
+      label: value.label,
+      icon: value.icon,
+      description: value.description
+    })),
+    maps: Object.entries(MAPS).map(([id, value]) => ({ id, ...value })),
+    shop: Object.entries(SHOP_ITEMS).map(([id, value]) => ({ id, ...value })),
+    ships: Object.entries(SHIP_TYPES).map(([id, value]) => ({ id, ...value }))
   };
 }
 
+function serializePlayer(player) {
+  if (!player) return null;
+  const sceneImage = localSceneImage(player);
+  const classImage = player.classImageFile ? `/assets/players/${player.classImageFile}` : null;
+  const weaponImage = player.weapon?.imageFile ? `/assets/weapons/${player.weapon.imageFile}` : null;
+  return {
+    name: player.webName ?? "網頁冒險者",
+    classKey: player.classKey,
+    classLabel: player.classLabel,
+    classImage,
+    sceneImage: player.combat?.imageFile
+      ? `/assets/enemies/${player.combat.imageFile}`
+      : sceneImage ?? classImage,
+    weaponImage,
+    hp: player.hp,
+    maxHp: player.maxHp,
+    attack: player.atk,
+    defense: player.def,
+    luck: player.luck ?? 0,
+    gold: player.gold,
+    floor: player.floor,
+    kills: player.kills,
+    alive: Boolean(player.alive),
+    completed: Boolean(player.completed),
+    mapKey: player.mapKey,
+    mapLabel: player.mapLabel,
+    startBuff: player.startBuff,
+    combat: player.combat ? {
+      name: player.combat.name,
+      icon: player.combat.icon,
+      hp: Math.max(0, player.combat.hp),
+      maxHp: player.combat.maxHp,
+      attack: player.combat.atk,
+      round: player.combat.round,
+      boss: Boolean(player.combat.boss),
+      elite: Boolean(player.combat.elite),
+      statuses: player.combat.statuses ?? {}
+    } : null,
+    hiddenRoom: Boolean(player.hiddenRoom),
+    items: Object.entries(player.items ?? {}).map(([id, quantity]) => ({
+      id,
+      quantity,
+      label: ITEM_DEFS[id]?.label ?? id,
+      icon: ITEM_DEFS[id]?.icon ?? "❔",
+      description: ITEM_DEFS[id]?.description ?? ""
+    })).filter((item) => item.quantity > 0),
+    weapon: player.weapon ?? null,
+    equipment: player.equipment ?? {},
+    equipmentBag: player.equipmentBag ?? [],
+    relics: (player.relics ?? []).map((id) => ({ id, name: RELICS[id]?.name ?? id, text: RELICS[id]?.text ?? "" })),
+    ships: (player.ships ?? []).map((ship) => ({
+      ...ship,
+      active: ship.type === player.activeShip,
+      info: SHIP_TYPES[ship.type] ?? null
+    })),
+    activeShip: player.activeShip,
+    dockCapacity: player.dockCapacity ?? 3,
+    fishCaught: player.fishCaught ?? 0,
+    debuffs: player.debuffs ?? {}
+  };
+}
+
+function localSceneImage(player) {
+  if (player.sceneImageFile) {
+    const folder = player.sceneImageFolder ?? "enemies";
+    return `/assets/${folder}/${player.sceneImageFile}`;
+  }
+  if (player.sceneImageUrl && !player.sceneImageUrl.startsWith("attachment://")) {
+    return player.sceneImageUrl;
+  }
+  return null;
+}
+
+async function playersPayload(client) {
+  const { loadPlayers } = require("./game");
+  const players = Object.values(loadPlayers());
+  const rows = await Promise.all(players.map(async (player) => ({
+    ...player,
+    displayName: player.id?.startsWith("web:")
+      ? player.webName ?? "網頁冒險者"
+      : await resolveName(client, player.id ?? player.userId),
+    relicNames: (player.relics ?? []).map((id) => RELICS[id]?.name ?? id)
+  })));
+  rows.sort((a, b) => (b.floor ?? 0) - (a.floor ?? 0));
+  return { updatedAt: new Date().toISOString(), players: rows };
+}
+
 async function resolveName(client, userId) {
+  if (!userId) return "未知玩家";
   const cached = client.users.cache.get(userId);
   if (cached) return cached.globalName || cached.username || userId;
-
   try {
     const user = await client.users.fetch(userId);
     return user.globalName || user.username || userId;
@@ -70,378 +276,67 @@ async function resolveName(client, userId) {
   }
 }
 
-function sendJson(res, value) {
+function webPlayerId(req, res) {
+  const cookies = Object.fromEntries(String(req.headers.cookie ?? "").split(";").map((part) => {
+    const index = part.indexOf("=");
+    return index < 0 ? ["", ""] : [part.slice(0, index).trim(), part.slice(index + 1).trim()];
+  }));
+  let token = cookies[COOKIE_NAME];
+  if (!/^[a-f0-9-]{36}$/.test(token ?? "")) {
+    token = crypto.randomUUID();
+    res.setHeader("set-cookie", `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`);
+  }
+  return `web:${token}`;
+}
+
+function cleanName(value) {
+  const name = String(value ?? "").trim().replace(/[<>]/g, "").slice(0, 20);
+  return name || "無名冒險者";
+}
+
+function readJson(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 65536) reject(new Error("Request body too large"));
+    });
+    req.on("end", () => {
+      try { resolve(body ? JSON.parse(body) : {}); } catch { reject(new Error("Invalid JSON")); }
+    });
+    req.on("error", reject);
+  });
+}
+
+function sendStatic(res, root, relativePath, longCache = false) {
+  const clean = decodeURIComponent(relativePath).replace(/\\/g, "/");
+  if (!clean || clean.split("/").includes("..")) {
+    sendError(res, 404, "找不到檔案。");
+    return;
+  }
+  const filePath = path.join(root, ...clean.split("/"));
+  if (!filePath.startsWith(root) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    sendError(res, 404, "找不到檔案。");
+    return;
+  }
   res.writeHead(200, {
+    "content-type": MIME_TYPES[path.extname(filePath).toLowerCase()] ?? "application/octet-stream",
+    "cache-control": longCache ? "public, max-age=86400" : "no-cache"
+  });
+  fs.createReadStream(filePath).pipe(res);
+}
+
+function sendJson(res, value, status = 200) {
+  res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store"
   });
   res.end(JSON.stringify(value));
 }
 
-function sendHtml(res, html) {
-  res.writeHead(200, {
-    "content-type": "text/html; charset=utf-8",
-    "cache-control": "no-store"
-  });
-  res.end(html);
+function sendError(res, status, message) {
+  sendJson(res, { error: message }, status);
 }
 
-function sendNotFound(res) {
-  res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-  res.end("Not found");
-}
-
-function pageHtml(port) {
-  return `<!doctype html>
-<html lang="zh-Hant">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Roguelike Bot Dashboard</title>
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #101113;
-      --panel: #191b1f;
-      --panel-2: #22252b;
-      --line: #343842;
-      --text: #f4f0e8;
-      --muted: #aaa39a;
-      --gold: #e7b84a;
-      --green: #5dd69a;
-      --red: #e06464;
-      --blue: #72a7ff;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0)),
-        var(--bg);
-      color: var(--text);
-      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-
-    main {
-      width: min(1180px, calc(100vw - 32px));
-      margin: 0 auto;
-      padding: 28px 0 40px;
-    }
-
-    header {
-      display: flex;
-      justify-content: space-between;
-      gap: 18px;
-      align-items: end;
-      margin-bottom: 20px;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(28px, 5vw, 48px);
-      line-height: 1;
-      letter-spacing: 0;
-    }
-
-    .subtitle {
-      margin: 10px 0 0;
-      color: var(--muted);
-      font-size: 15px;
-    }
-
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(92px, 1fr));
-      gap: 10px;
-      min-width: min(430px, 100%);
-    }
-
-    .stat {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
-    }
-
-    .stat span {
-      color: var(--muted);
-      display: block;
-      font-size: 12px;
-    }
-
-    .stat strong {
-      display: block;
-      margin-top: 4px;
-      font-size: 26px;
-    }
-
-    .toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 14px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    button {
-      border: 1px solid var(--line);
-      background: var(--panel-2);
-      color: var(--text);
-      border-radius: 8px;
-      padding: 9px 12px;
-      cursor: pointer;
-      font: inherit;
-    }
-
-    button:hover {
-      border-color: var(--blue);
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 14px;
-    }
-
-    .card {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 8px;
-      padding: 16px;
-      min-height: 220px;
-    }
-
-    .card-top {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: start;
-      margin-bottom: 12px;
-    }
-
-    .name {
-      font-size: 20px;
-      font-weight: 700;
-      word-break: break-word;
-    }
-
-    .class {
-      color: var(--muted);
-      margin-top: 3px;
-      font-size: 13px;
-    }
-
-    .badge {
-      border-radius: 999px;
-      padding: 5px 9px;
-      font-size: 12px;
-      color: #0d1114;
-      background: var(--green);
-      white-space: nowrap;
-    }
-
-    .badge.dead {
-      background: var(--red);
-      color: #fff;
-    }
-
-    .meter-label {
-      display: flex;
-      justify-content: space-between;
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 6px;
-    }
-
-    .meter {
-      height: 10px;
-      background: #0c0d10;
-      border-radius: 999px;
-      overflow: hidden;
-      border: 1px solid #2b2f36;
-    }
-
-    .meter > div {
-      height: 100%;
-      background: linear-gradient(90deg, var(--red), var(--gold), var(--green));
-      width: var(--value);
-    }
-
-    .facts {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin: 14px 0;
-    }
-
-    .fact {
-      background: #111317;
-      border-radius: 8px;
-      padding: 9px;
-      min-width: 0;
-    }
-
-    .fact span {
-      color: var(--muted);
-      font-size: 11px;
-      display: block;
-    }
-
-    .fact strong {
-      margin-top: 3px;
-      display: block;
-      font-size: 16px;
-    }
-
-    .relics {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      min-height: 28px;
-    }
-
-    .relic {
-      border: 1px solid #4a4130;
-      background: rgba(231, 184, 74, 0.12);
-      color: #f3d998;
-      border-radius: 999px;
-      padding: 5px 8px;
-      font-size: 12px;
-    }
-
-    .empty {
-      border: 1px dashed var(--line);
-      color: var(--muted);
-      padding: 28px;
-      border-radius: 8px;
-      text-align: center;
-    }
-
-    @media (max-width: 720px) {
-      header {
-        display: block;
-      }
-
-      .stats {
-        margin-top: 16px;
-      }
-
-      .facts {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <header>
-      <div>
-        <h1>地城觀戰台</h1>
-        <p class="subtitle">Discord roguelike bot dashboard, localhost:${port}</p>
-      </div>
-      <section class="stats">
-        <div class="stat"><span>玩家</span><strong id="total">0</strong></div>
-        <div class="stat"><span>冒險中</span><strong id="alive">0</strong></div>
-        <div class="stat"><span>已倒下</span><strong id="fallen">0</strong></div>
-      </section>
-    </header>
-
-    <section class="toolbar">
-      <span id="updated">等待資料...</span>
-      <button id="refresh" type="button">刷新</button>
-    </section>
-
-    <section id="players" class="grid"></section>
-  </main>
-
-  <script>
-    const playersEl = document.querySelector("#players");
-    const updatedEl = document.querySelector("#updated");
-    const totalEl = document.querySelector("#total");
-    const aliveEl = document.querySelector("#alive");
-    const fallenEl = document.querySelector("#fallen");
-    const refreshButton = document.querySelector("#refresh");
-
-    refreshButton.addEventListener("click", load);
-    window.addEventListener("focus", load);
-    load();
-    setInterval(load, 5000);
-
-    async function load() {
-      const response = await fetch("/api/players", { cache: "no-store" });
-      const data = await response.json();
-      render(data);
-    }
-
-    function render(data) {
-      totalEl.textContent = data.totals.players;
-      aliveEl.textContent = data.totals.alive;
-      fallenEl.textContent = data.totals.fallen;
-      updatedEl.textContent = "最後更新 " + new Date(data.updatedAt).toLocaleTimeString();
-
-      if (!data.players.length) {
-        playersEl.innerHTML = '<div class="empty">還沒有玩家存檔。去 Discord 打 /start 開一局。</div>';
-        return;
-      }
-
-      playersEl.innerHTML = data.players.map(playerCard).join("");
-    }
-
-    function playerCard(player) {
-      const hpPercent = Math.max(0, Math.min(100, Math.round((player.hp / player.maxHp) * 100)));
-      const relics = player.relicNames.length
-        ? player.relicNames.map((name) => '<span class="relic">' + escapeHtml(name) + '</span>').join("")
-        : '<span class="relic">無遺物</span>';
-
-      return '<article class="card">' +
-        '<div class="card-top">' +
-          '<div><div class="name">' + escapeHtml(player.displayName) + '</div>' +
-          '<div class="class">' + escapeHtml(player.classLabel) + '</div></div>' +
-          '<span class="badge ' + (player.alive ? '' : 'dead') + '">' + (player.alive ? '冒險中' : '已倒下') + '</span>' +
-        '</div>' +
-        '<div class="meter-label"><span>HP</span><span>' + player.hp + '/' + player.maxHp + '</span></div>' +
-        '<div class="meter" style="--value: ' + hpPercent + '%"><div></div></div>' +
-        '<div class="facts">' +
-          fact("層數", player.floor) +
-          fact("擊殺", player.kills) +
-          fact("金幣", player.gold) +
-          fact("攻擊", player.atk) +
-          fact("防禦", player.def) +
-          fact("ID", shortId(player.userId)) +
-        '</div>' +
-        '<div class="relics">' + relics + '</div>' +
-      '</article>';
-    }
-
-    function fact(label, value) {
-      return '<div class="fact"><span>' + label + '</span><strong>' + escapeHtml(String(value)) + '</strong></div>';
-    }
-
-    function shortId(id) {
-      return id.slice(0, 4) + "..." + id.slice(-4);
-    }
-
-    function escapeHtml(value) {
-      return value.replace(/[&<>"']/g, (char) => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-      }[char]));
-    }
-  </script>
-</body>
-</html>`;
-}
-
-module.exports = {
-  startDashboard
-};
+module.exports = { startDashboard };

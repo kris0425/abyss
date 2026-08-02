@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111318">
+  <title>深淵遠征</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+    <section id="loading" class="loading-screen" aria-live="polite">
+      <div class="loader-mark">A</div>
+      <p>正在連接深淵...</p>
+    </section>
+
+    <main id="start-screen" class="start-screen hidden">
+      <header class="brand-header">
+        <div>
+          <p class="eyebrow">ABYSS WEB EXPEDITION</p>
+          <h1>深淵遠征</h1>
+        </div>
+        <p class="start-summary">選擇職業、祝福與區域，建立你的五十層遠征。</p>
+      </header>
+
+      <form id="start-form" class="setup-layout">
+        <section class="setup-section class-section" aria-labelledby="class-title">
+          <div class="section-heading">
+            <span>01</span>
+            <div><h2 id="class-title">選擇職業</h2><p>每個職業都有獨立起始能力與動畫。</p></div>
+          </div>
+          <div id="class-options" class="class-options"></div>
+        </section>
+
+        <section class="setup-section choices-section">
+          <div class="section-heading">
+            <span>02</span>
+            <div><h2>遠征設定</h2><p>祝福與地圖會改變開局節奏。</p></div>
+          </div>
+          <label class="name-field">
+            <span>冒險者名稱</span>
+            <input id="player-name" name="name" maxlength="20" autocomplete="nickname" placeholder="無名冒險者">
+          </label>
+          <fieldset>
+            <legend>開局祝福</legend>
+            <div id="buff-options" class="segment-options"></div>
+          </fieldset>
+          <fieldset>
+            <legend>冒險地圖</legend>
+            <div id="map-options" class="map-options"></div>
+          </fieldset>
+          <button class="primary-command start-command" type="submit">開始遠征</button>
+        </section>
+      </form>
+    </main>
+
+    <main id="game-screen" class="game-screen hidden">
+      <header class="game-header">
+        <div class="game-brand">
+          <span class="brand-sigil">A</span>
+          <div><strong>深淵遠征</strong><small id="map-name">地下城</small></div>
+        </div>
+        <div class="run-summary" aria-label="遠征資訊">
+          <div><span>層數</span><strong id="floor-value">1 / 50</strong></div>
+          <div><span>金幣</span><strong id="gold-value">0</strong></div>
+          <div><span>擊殺</span><strong id="kill-value">0</strong></div>
+        </div>
+        <button id="new-run" class="quiet-command" type="button">新遠征</button>
+      </header>
+
+      <div class="game-layout">
+        <section class="scene-panel" aria-labelledby="event-title">
+          <div id="enemy-hud" class="enemy-hud hidden">
+            <div class="enemy-line"><strong id="enemy-name"></strong><span id="enemy-round"></span></div>
+            <div class="health-track enemy-track"><div id="enemy-health-bar"></div></div>
+            <div class="enemy-line detail"><span id="enemy-health-text"></span><span id="enemy-attack"></span></div>
+          </div>
+          <img id="scene-image" alt="目前場景">
+          <div class="scene-shade" aria-hidden="true"></div>
+          <article class="event-panel">
+            <p id="event-kicker">遠征紀錄</p>
+            <h2 id="event-title">準備出發</h2>
+            <div id="event-text" class="event-text"></div>
+          </article>
+        </section>
+
+        <aside class="player-panel">
+          <section class="player-identity">
+            <img id="class-portrait" alt="職業形象">
+            <div><p id="player-class"></p><h2 id="player-name-display"></h2><span id="condition-label"></span></div>
+          </section>
+
+          <section class="health-section">
+            <div class="health-label"><span>生命值</span><strong id="health-text"></strong></div>
+            <div class="health-track"><div id="health-bar"></div></div>
+          </section>
+
+          <section class="attribute-strip" aria-label="角色能力">
+            <div><span>攻擊</span><strong id="attack-value"></strong></div>
+            <div><span>防禦</span><strong id="defense-value"></strong></div>
+            <div><span>幸運</span><strong id="luck-value"></strong></div>
+          </section>
+
+          <nav class="panel-tabs" aria-label="角色資訊">
+            <button class="active" data-tab="status" type="button">狀態</button>
+            <button data-tab="inventory" type="button">背包</button>
+            <button data-tab="shop" type="button">商店</button>
+            <button data-tab="equipment" type="button">裝備</button>
+          </nav>
+          <section id="tab-content" class="tab-content"></section>
+        </aside>
+      </div>
+
+      <footer id="action-bar" class="action-bar" aria-label="遊戲操作"></footer>
+    </main>
+
+    <div id="toast" class="toast hidden" role="status"></div>
+  </div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
