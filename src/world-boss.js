@@ -496,6 +496,17 @@ async function replyWithBoss(interaction, title, text, components, color = 0x7c3
   });
 }
 
+function getOrCreateParticipant(userId) {
+  const existing = runtime.getPlayer(userId);
+  if (existing) return { player: existing, created: false };
+  if (typeof runtime.createPlayer !== "function") return { player: null, created: false };
+
+  const player = runtime.createPlayer(userId, "blade", "health", "dungeon");
+  player.worldBossGuest = true;
+  runtime.setPlayer(player);
+  return { player, created: true };
+}
+
 async function handleWorldBossButton(interaction) {
   const [, action, spawnKey] = interaction.customId.split(":");
   if (action === "open") {
@@ -506,11 +517,13 @@ async function handleWorldBossButton(interaction) {
     await interaction.reply({ content: "本次世界 Boss 活動已經結束。", ephemeral: true });
     return;
   }
-  const player = runtime.getPlayer(interaction.user.id);
-  if (!player) {
-    await interaction.reply({ content: "請先使用 `/start` 建立角色，再參加世界 Boss。", ephemeral: true });
-    return;
-  }
+  const participant = action === "status"
+    ? { player: null, created: false }
+    : getOrCreateParticipant(interaction.user.id);
+  const player = participant.player;
+  const newcomerText = participant.created
+    ? "系統已為你建立基礎刀客角色；之後可使用 `/start` 重新選擇正式職業。\n\n"
+    : "";
   await interaction.deferReply({ ephemeral: true });
 
   if (action === "team_join") {
@@ -520,7 +533,7 @@ async function handleWorldBossButton(interaction) {
     await replyWithBoss(
       interaction,
       existed ? "你已在討伐隊中" : "加入討伐隊成功",
-      `${teamStatusText()}\n\n你的團隊戰 HP：${member.hp}/${member.maxHp}`,
+      `${newcomerText}${teamStatusText()}\n\n你的團隊戰 HP：${member.hp}/${member.maxHp}`,
       [eventButtons(state.team.defeated)]
     );
     return;
@@ -544,7 +557,7 @@ async function handleWorldBossButton(interaction) {
     await replyWithBoss(
       interaction,
       "單人挑戰",
-      `你獨自踏入雷暴領域。\n\n${soloStatusText(solo)}`,
+      `${newcomerText}你獨自踏入雷暴領域。\n\n${soloStatusText(solo)}`,
       [soloButtons(solo.defeated || solo.hp <= 0)]
     );
     return;

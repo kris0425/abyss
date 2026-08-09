@@ -115,7 +115,7 @@ const client = new Client({
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
   startDashboard(readyClient);
-  startWorldBossSystem(readyClient, { getPlayer, setPlayer });
+  startWorldBossSystem(readyClient, { createPlayer, getPlayer, setPlayer });
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
