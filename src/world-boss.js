@@ -473,8 +473,6 @@ function unavailableText() {
 }
 
 async function showWorldBoss(interaction) {
-  state.channelId = interaction.channelId;
-  saveState();
   if (!eventIsActive()) {
     await interaction.reply({
       embeds: [bossEmbed("世界 Boss 預告", unavailableText(), 0x475569, false)],
@@ -500,6 +498,10 @@ async function replyWithBoss(interaction, title, text, components, color = 0x7c3
 
 async function handleWorldBossButton(interaction) {
   const [, action, spawnKey] = interaction.customId.split(":");
+  if (action === "open") {
+    await showWorldBoss(interaction);
+    return;
+  }
   if (spawnKey !== state.spawnKey || !eventIsActive()) {
     await interaction.reply({ content: "本次世界 Boss 活動已經結束。", ephemeral: true });
     return;

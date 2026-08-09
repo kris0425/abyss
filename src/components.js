@@ -186,7 +186,11 @@ function dockButton(disabled = false, ownerId = "global") {
       .setCustomId(`voyage:${ownerId}`)
       .setLabel("🌊 出航")
       .setStyle(ButtonStyle.Success)
-      .setDisabled(disabled)
+      .setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId(`wb:open:${ownerId}`)
+      .setLabel("🐉 世界 Boss")
+      .setStyle(ButtonStyle.Danger)
   );
 }
 
