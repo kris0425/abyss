@@ -53,7 +53,6 @@ DISCORD_TOKEN=你的機器人 token
 CLIENT_ID=你的 application client id
 GUILD_ID=你的測試伺服器 id
 DASHBOARD_PORT=3000
-WORLD_BOSS_CHANNEL_ID=世界Boss公告頻道ID（可不填）
 ```
 
 註冊 slash commands：
@@ -122,4 +121,4 @@ npm run web
 - 玩家可以選擇加入全服隊伍，或開啟自己的單人挑戰。
 - 出場公告會播放 MP4 動畫；若 Discord 無法上傳影片，會自動改用靜態圖片。
 - 組隊與單人擊敗都會獲得金幣、魚餌與永久幸運獎勵。
-- `WORLD_BOSS_CHANNEL_ID` 預設為 `🍵｜自由大廳`；送出失敗時會每分鐘重新嘗試，不會直接跳過該場活動。
+- 世界 Boss 會依排程在背景開啟，但不會自動向任何 Discord 頻道發送或更新公告。

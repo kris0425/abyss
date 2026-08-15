@@ -4,8 +4,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
-  PermissionFlagsBits
+  EmbedBuilder
 } = require("discord.js");
 
 const STATE_PATH = path.join(__dirname, "..", "data", "world-boss.json");
@@ -17,17 +16,13 @@ const INTRO_NAME = "thunder-bone-dragon-intro.mp4";
 const IDLE_NAME = "thunder-bone-dragon-idle.gif";
 const TIME_ZONE = "Asia/Taipei";
 const SPAWN_HOURS = [11, 19];
-const DEFAULT_ANNOUNCEMENT_CHANNEL_ID = "978165305589239870";
 const EVENT_DURATION_MS = 60 * 60 * 1000;
-const ANNOUNCEMENT_RETRY_MS = 60 * 1000;
-const INTRO_DURATION_MS = 12 * 1000;
 const TEAM_BASE_HP = 800;
 const TEAM_MEMBER_HP = 180;
 const SOLO_BOSS_HP = 360;
 
 let state = loadState();
 let runtime = null;
-let lastAnnouncementAttemptAt = 0;
 
 function defaultState() {
   return {
@@ -229,86 +224,6 @@ function announcementPayload({ includeIntro = false, includeIdle = false } = {})
     components: [eventButtons(!active || state.team?.defeated)],
     files: bossFiles({ includeIntro, includeIdle })
   };
-}
-
-function scheduleIdleVideo(client, channelId, messageId) {
-  const timer = setTimeout(async () => {
-    if (!eventIsActive()) return;
-    const channel = await client.channels.fetch(channelId).catch(() => null);
-    const message = await channel?.messages?.fetch(messageId).catch(() => null);
-    if (!message) return;
-    const payload = announcementPayload({ includeIdle: true });
-    await message.edit({ ...payload, attachments: [] }).catch((error) => {
-      console.error("World boss idle video update failed; keeping the intro attachment.", error);
-    });
-  }, INTRO_DURATION_MS);
-  timer.unref?.();
-}
-
-async function chooseAnnouncementChannel(client) {
-  const requiredPermissions = [
-    PermissionFlagsBits.ViewChannel,
-    PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.EmbedLinks,
-    PermissionFlagsBits.AttachFiles
-  ];
-  const canAnnounce = (channel) => {
-    if (!channel?.isTextBased?.() || typeof channel.send !== "function") return false;
-    const permissions = channel.permissionsFor?.(client.user);
-    return !permissions || permissions.has(requiredPermissions);
-  };
-  const preferredIds = [
-    process.env.WORLD_BOSS_CHANNEL_ID,
-    DEFAULT_ANNOUNCEMENT_CHANNEL_ID,
-    state.channelId
-  ].filter(Boolean);
-
-  for (const channelId of [...new Set(preferredIds)]) {
-    const channel = await client.channels.fetch(channelId).catch(() => null);
-    if (canAnnounce(channel)) return channel;
-  }
-
-  for (const guild of client.guilds.cache.values()) {
-    const lobby = guild.channels.cache.find((channel) =>
-      channel?.name?.includes("自由大廳") && canAnnounce(channel)
-    );
-    if (lobby) return lobby;
-    if (canAnnounce(guild.systemChannel)) return guild.systemChannel;
-    const fallback = guild.channels.cache.find(canAnnounce);
-    if (fallback) return fallback;
-  }
-  return null;
-}
-
-async function announceEvent(client) {
-  const channel = await chooseAnnouncementChannel(client);
-  if (!channel) {
-    console.warn("World boss spawned, but no announcement channel was available.");
-    return false;
-  }
-  try {
-    const message = await channel.send(announcementPayload({ includeIntro: true }));
-    state.channelId = channel.id;
-    state.messageId = message.id;
-    saveState();
-    scheduleIdleVideo(client, channel.id, message.id);
-    console.log(`World boss announced in #${channel.name ?? channel.id} (${channel.id}).`);
-    return true;
-  } catch (error) {
-    console.error("World boss intro upload failed, retrying with the idle video.", error);
-    try {
-      const fallback = announcementPayload({ includeIdle: true });
-      const message = await channel.send(fallback);
-      state.channelId = channel.id;
-      state.messageId = message.id;
-      saveState();
-      console.log(`World boss announced without video in #${channel.name ?? channel.id} (${channel.id}).`);
-      return true;
-    } catch (fallbackError) {
-      console.error(`World boss announcement failed in channel ${channel.id}; it will retry.`, fallbackError);
-      return false;
-    }
-  }
 }
 
 async function refreshAnnouncement(client) {
@@ -592,24 +507,24 @@ async function schedulerTick() {
   }
 
   if (slot.key !== state.lastSpawnKey) {
-    createEvent(slot, process.env.WORLD_BOSS_CHANNEL_ID || DEFAULT_ANNOUNCEMENT_CHANNEL_ID);
+    createEvent(slot);
   }
-  if (!eventIsActive() || state.messageId) return;
-
-  const now = Date.now();
-  if (now - lastAnnouncementAttemptAt < ANNOUNCEMENT_RETRY_MS) return;
-  lastAnnouncementAttemptAt = now;
-  await announceEvent(runtime.client);
+  eventIsActive();
 }
 
 function startWorldBossSystem(client, helpers) {
   runtime = { client, ...helpers };
+  if (state.channelId || state.messageId) {
+    state.channelId = null;
+    state.messageId = null;
+    saveState();
+  }
   schedulerTick().catch((error) => console.error("World boss scheduler failed.", error));
   const timer = setInterval(() => {
     schedulerTick().catch((error) => console.error("World boss scheduler failed.", error));
   }, 20 * 1000);
   timer.unref?.();
-  console.log("World boss scheduler ready: 11:00 / 19:00 Asia/Taipei.");
+  console.log("World boss scheduler ready without announcements: 11:00 / 19:00 Asia/Taipei.");
 }
 
 module.exports = {
